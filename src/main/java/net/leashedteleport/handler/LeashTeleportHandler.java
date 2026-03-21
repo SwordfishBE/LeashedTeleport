@@ -80,7 +80,9 @@ public class LeashTeleportHandler {
 
         if (mob instanceof TamableAnimal tamable && tamable.isTame()) {
             Entity owner = tamable.getOwner();
-            if (owner != null && !owner.getUUID().equals(player.getUUID())) return false;
+            // Block if owner is a different player, OR if the owner is offline (null) —
+            // we cannot verify ownership when the owner isn't loaded, so we refuse.
+            if (owner == null || !owner.getUUID().equals(player.getUUID())) return false;
         }
 
         return true;
