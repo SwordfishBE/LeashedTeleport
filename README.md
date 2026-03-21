@@ -87,6 +87,7 @@ Use the blacklist to exclude specific mobs — for example animals that are too 
 - Only `/tp`-based teleportation is supported. Portals do not trigger leash teleportation.
 - For cross-dimension teleports, the leash is re-attached as soon as the entity is loaded in the new dimension.
 - Protection effects are applied silently.
+- The mod must be installed server-side. Players do not need to install the mod on their client. This mod does work in single-player.
 
 ---
 
