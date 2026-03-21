@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "leashedteleport",
+  "version": "${version}",
+  "name": "Leashed Teleport",
+  "description": "Teleport your leashed entities with you.",
+  "authors": [
+    "SwordfishBE"
+  ],
+  "contact": {
+    "homepage": "https://github.com/SwordfishBE/LeashedTeleport",
+    "sources": "https://github.com/SwordfishBE/LeashedTeleport",
+    "issues": "https://github.com/SwordfishBE/LeashedTeleport/issues"
+  },
+  "license": "AGPL-3.0",
+  "icon": "assets/leashedteleport/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "net.leashedteleport.LeashedTeleportMod"
+    ]
+  },
+  "mixins": [
+    "leashedteleport.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.10",
+    "fabric-api": "*",
+    "minecraft": "~1.21.11"
+  }
+}
