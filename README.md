@@ -1,4 +1,4 @@
-# Leashed Teleport
+## 🪢 Leashed Teleport
 
 A Fabric mod for Minecraft that brings your leashed entities along when you teleport via `/tp`.
 
@@ -6,7 +6,7 @@ Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands
 
 ---
 
-## Features
+## ✨ Features
 
 - **Leash-based teleportation** — any mob leashed directly to you and within the configured radius teleports with you when you use `/tp`.
 - **Fall damage protection** — teleported entities receive Damage Resistance V and Slow Falling for a configurable duration to survive the landing.
@@ -19,7 +19,7 @@ Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands
 
 ---
 
-## Commands
+## 🔄 Commands
 
 | Command                      | Description                                        |
 |------------------------------|----------------------------------------------------|
@@ -28,7 +28,7 @@ Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
 Config file: `.minecraft/config/leashedteleport.json`
 
@@ -73,7 +73,7 @@ Use the blacklist to exclude specific mobs — for example animals that are too 
 
 ---
 
-## Compatibility
+## 🧑‍🤝‍🧑 Compatibility
 
 | Mod | Status |
 |-----|--------|
@@ -82,11 +82,20 @@ Use the blacklist to exclude specific mobs — for example animals that are too 
 
 ---
 
-## Notes
+## 🧾 Notes
 
 - Only `/tp`-based teleportation is supported. Portals do not trigger leash teleportation.
 - For cross-dimension teleports, the leash is re-attached as soon as the entity is loaded in the new dimension.
-- Protection effects are applied silently (no particles, no HUD indicator).
+- Protection effects are applied silently.
+
+---
+
+## 📦 Installation
+
+1. Install [Fabric Loader](https://fabricmc.net/use/) for Minecraft.
+2. Download [Fabric API](https://modrinth.com/mod/fabric-api) and place it in `mods/`.
+3. Download `leashedteleport-<version>.jar` and place it in `mods/`.
+4. Launch Minecraft. The config is created automatically on first run.
 
 ---
 
@@ -102,6 +111,6 @@ chmod +x gradlew
 
 ---
 
-## License
+## 📄 License
 
 Released under the [AGPL-3.0 License](LICENSE).
