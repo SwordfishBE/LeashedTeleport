@@ -102,7 +102,14 @@ public class LeashTeleportHandler {
 
         boolean crossDim = originLevel != targetLevel;
         if (crossDim && !config.isCrossDimensionTeleport()) {
-            LeashedTeleportMod.LOGGER.debug("[LeashedTeleport] Cross-dimension teleport disabled. Skipping.");
+            // Cross-dim disabled: silently drop the leash so the mob stays behind cleanly.
+            // The player crosses dimensions; if they return, vanilla leash distance rules apply.
+            for (Mob mob : mobs) {
+                if (!mob.isRemoved()) {
+                    ((LeashableEntityAccessor) mob).leashedteleport_setLeashData(null);
+                }
+            }
+            LeashedTeleportMod.LOGGER.debug("[LeashedTeleport] Cross-dimension teleport disabled. Leash released.");
             return;
         }
 
