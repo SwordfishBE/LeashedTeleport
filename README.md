@@ -80,6 +80,7 @@ Use the blacklist to exclude specific mobs — for example animals that are too 
 |-----|--------|
 | [Essential Commands](https://modrinth.com/mod/essential-commands) | ✅ Compatible |
 | [Fabric Essentials](https://modrinth.com/mod/melius-essentials) | ✅ Compatible |
+| [TpWithMe](https://github.com/SwordfishBE/TpWithMe) | ✅ Compatible |
 
 ---
 
