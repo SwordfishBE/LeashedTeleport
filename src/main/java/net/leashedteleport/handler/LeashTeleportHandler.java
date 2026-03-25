@@ -4,10 +4,12 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.leashedteleport.LeashedTeleportMod;
 import net.leashedteleport.config.LeashedTeleportConfig;
 import net.leashedteleport.mixin.LeashableEntityAccessor;
+import net.leashedteleport.safety.TeleportSafetyChecker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
@@ -100,6 +102,22 @@ public class LeashTeleportHandler {
             return;
         }
 
+        // Safety check: find a safe location for the mobs
+        BlockPos safePos = TeleportSafetyChecker.findSafeLocation(targetLevel, x, y, z);
+        if (safePos == null) {
+            LeashedTeleportMod.LOGGER.warn(
+                "[LeashedTeleport] No safe location found near destination ({}, {}, {}). Teleport cancelled for {} mob(s).",
+                x, y, z, mobs.size());
+            player.sendSystemMessage(Component.literal(
+                "[LeashedTeleport] Not enough space at destination – your leashed mob stayed behind."));
+            return;
+        }
+
+        // Use the safe position instead of the original coordinates
+        double safeX = safePos.getX() + 0.5;
+        double safeY = safePos.getY();
+        double safeZ = safePos.getZ() + 0.5;
+
         boolean crossDim = originLevel != targetLevel;
         if (crossDim && !config.isCrossDimensionTeleport()) {
             // Cross-dim disabled: silently drop the leash so the mob stays behind cleanly.
@@ -125,17 +143,17 @@ public class LeashTeleportHandler {
                 ((LeashableEntityAccessor) mob).leashedteleport_setLeashData(null);
                 applyProtection(mob, config.getDamageResistanceDuration());
                 // Teleport mob to target level — ENTITY_LOAD event handles leash re-attach when mob arrives
-                mob.teleportTo(targetLevel, x, y, z, Set.of(), mob.getYRot(), mob.getXRot(), false);
+                mob.teleportTo(targetLevel, safeX, safeY, safeZ, Set.of(), mob.getYRot(), mob.getXRot(), false);
             } else {
-                mob.snapTo(x, y, z, mob.getYRot(), mob.getXRot());
+                mob.snapTo(safeX, safeY, safeZ, mob.getYRot(), mob.getXRot());
                 applyProtection(mob, config.getDamageResistanceDuration());
             }
             count++;
         }
 
         if (count > 0) {
-            LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Teleported {} leashed mob(s) with player {}.",
-                count, player.getName().getString());
+            LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Teleported {} leashed mob(s) with player {} to safe location {}.",
+                count, player.getName().getString(), safePos);
         }
     }
 

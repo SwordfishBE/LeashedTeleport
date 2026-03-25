@@ -9,6 +9,7 @@ Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands
 ## ✨ Features
 
 - **Leash-based teleportation** — any mob leashed directly to you and within the configured radius teleports with you when you use `/tp`.
+- **Intelligent safety checks** — the mod automatically detects unsafe destinations (lava, fire, void, suffocation hazards) and finds a nearby safe location within a 5-block radius. If no safe spot is found, the teleport is cancelled to prevent mob death.
 - **Fall damage protection** — teleported entities receive Damage Resistance V and Slow Falling for a configurable duration to survive the landing.
 - **Tame ownership check** — tamed animals (dogs, cats, horses, etc.) only teleport if they are owned by the teleporting player. Animals tamed by other players are left behind.
 - **Sitting entities supported** — sitting tamed animals teleport as long as they are leashed to and owned by the teleporting player.
@@ -87,6 +88,7 @@ Use the blacklist to exclude specific mobs — for example animals that are too 
 - Only `/tp`-based teleportation is supported. Portals do not trigger leash teleportation.
 - For cross-dimension teleports, the leash is re-attached as soon as the entity is loaded in the new dimension.
 - Protection effects are applied silently.
+- The safety system checks for hazards like lava, fire, void, and suffocation. If the exact teleport destination is unsafe, the mod searches within a 5-block radius for a safe alternative. This prevents accidental mob deaths from teleporting into dangerous locations.
 - The mod must be installed server-side. Players do not need to install the mod on their client. This mod does work in single-player.
 
 ---
