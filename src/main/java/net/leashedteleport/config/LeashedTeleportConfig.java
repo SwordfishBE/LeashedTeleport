@@ -22,12 +22,14 @@ public class LeashedTeleportConfig {
     private static LeashedTeleportConfig instance = new LeashedTeleportConfig();
 
     public double leash_radius = 10.0;
+    public boolean useLuckPerms = false;
     public boolean cross_dimension_teleport = true;
     public int damage_resistance_duration_ticks = 100;
     public List<String> entity_blacklist = new ArrayList<>();
 
     public static LeashedTeleportConfig get() { return instance; }
     public double getLeashRadius() { return leash_radius; }
+    public boolean isUseLuckPerms() { return useLuckPerms; }
     public boolean isCrossDimensionTeleport() { return cross_dimension_teleport; }
     public int getDamageResistanceDuration() { return Math.max(1, damage_resistance_duration_ticks); }
     public List<String> getBlacklist() { return entity_blacklist != null ? entity_blacklist : new ArrayList<>(); }
@@ -41,6 +43,7 @@ public class LeashedTeleportConfig {
         try (Reader reader = Files.newBufferedReader(CONFIG_PATH)) {
             LeashedTeleportConfig loaded = GSON.fromJson(reader, LeashedTeleportConfig.class);
             instance = (loaded != null) ? loaded : new LeashedTeleportConfig();
+            save();
             LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Config loaded successfully.");
         } catch (IOException e) {
             LeashedTeleportMod.LOGGER.error("[LeashedTeleport] Failed to load config: {}", e.getMessage());

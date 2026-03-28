@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.leashedteleport.LeashedTeleportMod;
 import net.leashedteleport.config.LeashedTeleportConfig;
 import net.leashedteleport.mixin.LeashableEntityAccessor;
+import net.leashedteleport.permission.PermissionManager;
 import net.leashedteleport.safety.TeleportSafetyChecker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -95,6 +96,13 @@ public class LeashTeleportHandler {
         if (mobs.isEmpty()) return;
 
         LeashedTeleportConfig config = LeashedTeleportConfig.get();
+        if (!PermissionManager.canUse(player)) {
+            LeashedTeleportMod.LOGGER.debug(
+                    "[LeashedTeleport] Player {} lacks permission {}.",
+                    player.getName().getString(),
+                    PermissionManager.USE_PERMISSION);
+            return;
+        }
 
         WorldBorder border = targetLevel.getWorldBorder();
         if (!border.isWithinBounds(BlockPos.containing(x, y, z))) {
@@ -119,6 +127,14 @@ public class LeashTeleportHandler {
         double safeZ = safePos.getZ() + 0.5;
 
         boolean crossDim = originLevel != targetLevel;
+        if (crossDim && !PermissionManager.canCrossDimensionTeleport(player)) {
+            LeashedTeleportMod.LOGGER.debug(
+                    "[LeashedTeleport] Player {} lacks permission {}.",
+                    player.getName().getString(),
+                    PermissionManager.CROSS_DIMENSION_TELEPORT_PERMISSION);
+            return;
+        }
+
         if (crossDim && !config.isCrossDimensionTeleport()) {
             // Cross-dim disabled: silently drop the leash so the mob stays behind cleanly.
             // The player crosses dimensions; if they return, vanilla leash distance rules apply.
