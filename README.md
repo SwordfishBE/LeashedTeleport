@@ -4,6 +4,11 @@ A Fabric mod for Minecraft that brings your leashed entities along when you tele
 
 Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands) and [Fabric Essentials](https://modrinth.com/mod/melius-essentials) — any mod that uses `/tp` under the hood will trigger leash teleportation automatically.
 
+[![GitHub Release](https://img.shields.io/github/v/release/SwordfishBE/LeashedTeleport?display_name=release&logo=github)](https://github.com/SwordfishBE/LeashedTeleport/releases)
+[![GitHub Downloads](https://img.shields.io/github/downloads/SwordfishBE/LeashedTeleport/total?logo=github)](https://github.com/SwordfishBE/LeashedTeleport/releases)
+[![Modrinth Downloads](https://img.shields.io/modrinth/dt/G12zLjMK?logo=modrinth&logoColor=white&label=Modrinth%20downloads)](https://modrinth.com/mod/leashed-teleport)
+[![CurseForge Downloads](https://img.shields.io/curseforge/dt/1491827?logo=curseforge&logoColor=white&label=CurseForge%20downloads)](https://www.curseforge.com/minecraft/mc-mods/undead-riders)
+
 ---
 
 ## ✨ Features
@@ -146,11 +151,16 @@ Official LuckPerms docs:
 
 ## 📦 Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) for Minecraft.
-2. Download [Fabric API](https://modrinth.com/mod/fabric-api) and place it in `mods/`.
-3. Download `leashedteleport-<version>.jar` and place it in `mods/`.
-4. Optional: install [LuckPerms](https://modrinth.com/mod/luckperms) if you want permission-based access control.
-5. Launch Minecraft. The config is created automatically on first run.
+| Platform   | Link |
+|------------|------|
+| GitHub     | [Releases](https://github.com/SwordfishBE/LeashedTeleport/releases) |
+| Modrinth   | [Leashed Teleport](https://modrinth.com/mod/leashed-teleport) |
+| CurseForge | [Leashed Teleport](https://www.curseforge.com/minecraft/mc-mods/leashed-teleport) |
+
+1. Download the latest JAR from your preferred platform above.
+2. Place the JAR in your server's `mods/` folder.
+3. Make sure [Fabric API](https://modrinth.com/mod/fabric-api) is also installed.
+4. Start Minecraft — the config file will be created automatically.
 
 ---
 
