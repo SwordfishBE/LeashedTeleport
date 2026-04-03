@@ -2,14 +2,14 @@ package net.leashedteleport.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
 import net.fabricmc.loader.api.FabricLoader;
 import net.leashedteleport.LeashedTeleportMod;
 
 import java.io.IOException;
-import java.io.Reader;
-import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,22 +40,100 @@ public class LeashedTeleportConfig {
             save();
             return;
         }
-        try (Reader reader = Files.newBufferedReader(CONFIG_PATH)) {
-            LeashedTeleportConfig loaded = GSON.fromJson(reader, LeashedTeleportConfig.class);
+        try {
+            String rawConfig = Files.readString(CONFIG_PATH);
+            LeashedTeleportConfig loaded = GSON.fromJson(stripJsonComments(rawConfig), LeashedTeleportConfig.class);
             instance = (loaded != null) ? loaded : new LeashedTeleportConfig();
             save();
             LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Config loaded successfully.");
-        } catch (IOException e) {
+        } catch (IOException | JsonSyntaxException e) {
             LeashedTeleportMod.LOGGER.error("[LeashedTeleport] Failed to load config: {}", e.getMessage());
             instance = new LeashedTeleportConfig();
         }
     }
 
     public static void save() {
-        try (Writer writer = Files.newBufferedWriter(CONFIG_PATH)) {
-            GSON.toJson(instance, writer);
+        try {
+            Files.createDirectories(CONFIG_PATH.getParent());
+            Files.writeString(CONFIG_PATH, buildCommentedConfig(instance));
         } catch (IOException e) {
             LeashedTeleportMod.LOGGER.error("[LeashedTeleport] Failed to save config: {}", e.getMessage());
         }
+    }
+
+    private static String buildCommentedConfig(LeashedTeleportConfig config) {
+        List<String> blacklist = config.entity_blacklist != null ? config.entity_blacklist : Collections.emptyList();
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("{\n");
+        builder.append("  \"leash_radius\": ").append(GSON.toJson(config.leash_radius))
+                .append(", // Maximum distance in blocks from the player. Mobs further away are left behind.\n");
+        builder.append("  \"useLuckPerms\": ").append(config.useLuckPerms)
+                .append(", // When true, Leashed Teleport checks LuckPerms permission nodes if LuckPerms is installed.\n");
+        builder.append("  \"cross_dimension_teleport\": ").append(config.cross_dimension_teleport)
+                .append(", // Allow leashed mobs to follow you between dimensions such as the Overworld, Nether, and End.\n");
+        builder.append("  \"damage_resistance_duration_ticks\": ").append(config.damage_resistance_duration_ticks)
+                .append(", // Duration of Damage Resistance V and Slow Falling after teleport. 20 ticks = 1 second.\n");
+        builder.append("  \"entity_blacklist\": ");
+
+        if (blacklist.isEmpty()) {
+            builder.append("[]");
+        } else {
+            builder.append("[\n");
+            for (int i = 0; i < blacklist.size(); i++) {
+                builder.append("    ").append(GSON.toJson(blacklist.get(i)));
+                if (i < blacklist.size() - 1) {
+                    builder.append(",");
+                }
+                builder.append("\n");
+            }
+            builder.append("  ]");
+        }
+
+        builder.append(" // Entity type IDs that should never teleport, even when leashed to you.\n");
+        builder.append("}\n");
+        return builder.toString();
+    }
+
+    private static String stripJsonComments(String input) {
+        StringBuilder result = new StringBuilder();
+        boolean inString = false;
+        boolean escaping = false;
+
+        for (int i = 0; i < input.length(); i++) {
+            char current = input.charAt(i);
+
+            if (escaping) {
+                result.append(current);
+                escaping = false;
+                continue;
+            }
+
+            if (current == '\\' && inString) {
+                result.append(current);
+                escaping = true;
+                continue;
+            }
+
+            if (current == '"') {
+                inString = !inString;
+                result.append(current);
+                continue;
+            }
+
+            if (!inString && current == '/' && i + 1 < input.length() && input.charAt(i + 1) == '/') {
+                while (i < input.length() && input.charAt(i) != '\n') {
+                    i++;
+                }
+                if (i < input.length()) {
+                    result.append('\n');
+                }
+                continue;
+            }
+
+            result.append(current);
+        }
+
+        return result.toString();
     }
 }

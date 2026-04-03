@@ -39,15 +39,15 @@ Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands
 
 Config file: `.minecraft/config/leashedteleport.json`
 
-A default config is created automatically on first launch.
+A default config is created automatically on first launch, with inline comments that explain each option.
 
-```json
+```jsonc
 {
-  "leash_radius": 10.0,
-  "useLuckPerms": false,
-  "cross_dimension_teleport": true,
-  "damage_resistance_duration_ticks": 100,
-  "entity_blacklist": []
+  "leash_radius": 10.0, // Maximum distance in blocks from the player. Mobs further away are left behind.
+  "useLuckPerms": false, // When true, Leashed Teleport checks LuckPerms permission nodes if LuckPerms is installed.
+  "cross_dimension_teleport": true, // Allow leashed mobs to follow you between dimensions such as the Overworld, Nether, and End.
+  "damage_resistance_duration_ticks": 100, // Duration of Damage Resistance V and Slow Falling after teleport. 20 ticks = 1 second.
+  "entity_blacklist": [] // Entity type IDs that should never teleport, even when leashed to you.
 }
 ```
 
