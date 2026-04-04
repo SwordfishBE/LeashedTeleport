@@ -9,8 +9,8 @@ import net.leashedteleport.LeashedTeleportMod;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class LeashedTeleportConfig {
@@ -33,10 +33,20 @@ public class LeashedTeleportConfig {
     public boolean isCrossDimensionTeleport() { return cross_dimension_teleport; }
     public int getDamageResistanceDuration() { return Math.max(1, damage_resistance_duration_ticks); }
     public List<String> getBlacklist() { return entity_blacklist != null ? entity_blacklist : new ArrayList<>(); }
+    public LeashedTeleportConfig copy() {
+        LeashedTeleportConfig copy = new LeashedTeleportConfig();
+        copy.leash_radius = leash_radius;
+        copy.useLuckPerms = useLuckPerms;
+        copy.cross_dimension_teleport = cross_dimension_teleport;
+        copy.damage_resistance_duration_ticks = damage_resistance_duration_ticks;
+        copy.entity_blacklist = entity_blacklist != null ? new ArrayList<>(entity_blacklist) : new ArrayList<>();
+        return copy;
+    }
 
     public static void load() {
         if (!Files.exists(CONFIG_PATH)) {
             LeashedTeleportMod.LOGGER.info("[LeashedTeleport] No config found, creating default.");
+            instance.normalize();
             save();
             return;
         }
@@ -44,12 +54,25 @@ public class LeashedTeleportConfig {
             String rawConfig = Files.readString(CONFIG_PATH);
             LeashedTeleportConfig loaded = GSON.fromJson(stripJsonComments(rawConfig), LeashedTeleportConfig.class);
             instance = (loaded != null) ? loaded : new LeashedTeleportConfig();
+            instance.normalize();
             save();
             LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Config loaded successfully.");
         } catch (IOException | JsonSyntaxException e) {
             LeashedTeleportMod.LOGGER.error("[LeashedTeleport] Failed to load config: {}", e.getMessage());
             instance = new LeashedTeleportConfig();
+            instance.normalize();
         }
+    }
+
+    public static LeashedTeleportConfig loadCopy() {
+        load();
+        return instance.copy();
+    }
+
+    public static void replace(LeashedTeleportConfig updatedConfig) {
+        instance = updatedConfig != null ? updatedConfig.copy() : new LeashedTeleportConfig();
+        instance.normalize();
+        save();
     }
 
     public static void save() {
@@ -59,6 +82,32 @@ public class LeashedTeleportConfig {
         } catch (IOException e) {
             LeashedTeleportMod.LOGGER.error("[LeashedTeleport] Failed to save config: {}", e.getMessage());
         }
+    }
+
+    public void normalize() {
+        if (leash_radius < 0.0D) {
+            leash_radius = 0.0D;
+        }
+
+        damage_resistance_duration_ticks = Math.max(1, damage_resistance_duration_ticks);
+
+        if (entity_blacklist == null) {
+            entity_blacklist = new ArrayList<>();
+            return;
+        }
+
+        List<String> normalized = new ArrayList<>();
+        for (String entry : entity_blacklist) {
+            if (entry == null) {
+                continue;
+            }
+
+            String trimmed = entry.trim();
+            if (!trimmed.isEmpty()) {
+                normalized.add(trimmed);
+            }
+        }
+        entity_blacklist = normalized;
     }
 
     private static String buildCommentedConfig(LeashedTeleportConfig config) {

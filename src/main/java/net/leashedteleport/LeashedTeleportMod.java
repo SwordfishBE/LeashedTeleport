@@ -29,4 +29,15 @@ public class LeashedTeleportMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> ModrinthUpdateChecker.checkOnceAsync());
         LOGGER.info("[LeashedTeleport] Mod initialized. Version: {}", VERSION);
     }
+
+    public static LeashedTeleportConfig loadConfigForEditing() {
+        return LeashedTeleportConfig.loadCopy();
+    }
+
+    public static void applyEditedConfig(LeashedTeleportConfig editedConfig) {
+        LeashedTeleportConfig normalizedConfig = editedConfig.copy();
+        normalizedConfig.normalize();
+        LeashedTeleportConfig.replace(normalizedConfig);
+        PermissionManager.refreshState();
+    }
 }

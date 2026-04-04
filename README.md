@@ -2,8 +2,6 @@
 
 A Fabric mod for Minecraft that brings your leashed entities along when you teleport via `/tp`.
 
-Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands) and [Fabric Essentials](https://modrinth.com/mod/melius-essentials) — any mod that uses `/tp` under the hood will trigger leash teleportation automatically.
-
 [![GitHub Release](https://img.shields.io/github/v/release/SwordfishBE/LeashedTeleport?display_name=release&logo=github)](https://github.com/SwordfishBE/LeashedTeleport/releases)
 [![GitHub Downloads](https://img.shields.io/github/downloads/SwordfishBE/LeashedTeleport/total?logo=github)](https://github.com/SwordfishBE/LeashedTeleport/releases)
 [![Modrinth Downloads](https://img.shields.io/modrinth/dt/G12zLjMK?logo=modrinth&logoColor=white&label=Modrinth%20downloads)](https://modrinth.com/mod/leashed-teleport)
@@ -22,6 +20,7 @@ Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands
 - **Optional LuckPerms integration** — enable permission nodes for general use and cross-dimension teleports when LuckPerms is installed.
 - **World border aware** — if the destination is outside the world border, leashed entities are not teleported.
 - **Configurable blacklist** — define entity types that should never teleport, even if leashed to you.
+- **Optional Mod Menu integration** — when Mod Menu and Cloth Config are present on the client, you can edit the same config through an in-game screen.
 - **In-game commands** — `/leashedteleport info` and `/leashedteleport reload` (operator level 2 required).
 
 ---
@@ -40,6 +39,8 @@ Compatible with [Essential Commands](https://modrinth.com/mod/essential-commands
 Config file: `.minecraft/config/leashedteleport.json`
 
 A default config is created automatically on first launch, with inline comments that explain each option.
+
+If Mod Menu is installed on the client, Leashed Teleport exposes a config screen there too. Cloth Config is optional: without it, the mod still works normally, but no config GUI is shown.
 
 ```jsonc
 {
@@ -145,6 +146,7 @@ Official LuckPerms docs:
 - Protection effects are applied silently.
 - The safety system checks for hazards like lava, fire, void, and suffocation. If the exact teleport destination is unsafe, the mod searches within a 5-block radius for a safe alternative. This prevents accidental mob deaths from teleporting into dangerous locations.
 - The mod must be installed server-side. Players do not need to install the mod on their client. This mod does work in single-player.
+- Mod Menu and Cloth Config are purely optional client-side extras. A dedicated server does not need them.
 - `/leashedteleport info` is operator-only and shows whether LuckPerms is `disabled`, `configured, but mod not installed`, or `active`.
 
 ---
@@ -160,7 +162,8 @@ Official LuckPerms docs:
 1. Download the latest JAR from your preferred platform above.
 2. Place the JAR in your server's `mods/` folder.
 3. Make sure [Fabric API](https://modrinth.com/mod/fabric-api) is also installed.
-4. Start Minecraft — the config file will be created automatically.
+4. Optional for single-player or client config GUI: also install [Mod Menu](https://modrinth.com/mod/modmenu) and [Cloth Config](https://modrinth.com/mod/cloth-config).
+5. Start Minecraft — the config file will be created automatically.
 
 ---
 
