@@ -23,17 +23,18 @@ public final class PermissionManager {
         luckPermsActive = LeashedTeleportConfig.get().isUseLuckPerms() && luckPermsInstalled;
 
         if (luckPermsActive) {
-            LeashedTeleportMod.LOGGER.info("[LeashedTeleport] LuckPerms permissions are active.");
+            LeashedTeleportMod.LOGGER.debug("[{}] LuckPerms permissions are active.", LeashedTeleportMod.MOD_NAME);
             return;
         }
 
         if (LeashedTeleportConfig.get().isUseLuckPerms()) {
             LeashedTeleportMod.LOGGER.warn(
-                    "[LeashedTeleport] useLuckPerms is enabled, but LuckPerms is not installed. Everyone can use Leashed Teleport.");
+                    "[{}] useLuckPerms is enabled, but LuckPerms is not installed. Everyone can use Leashed Teleport.",
+                    LeashedTeleportMod.MOD_NAME);
             return;
         }
 
-        LeashedTeleportMod.LOGGER.info("[LeashedTeleport] LuckPerms integration is disabled in the config.");
+        LeashedTeleportMod.LOGGER.debug("[{}] LuckPerms integration is disabled in the config.", LeashedTeleportMod.MOD_NAME);
     }
 
     public static boolean isLuckPermsInstalled() {

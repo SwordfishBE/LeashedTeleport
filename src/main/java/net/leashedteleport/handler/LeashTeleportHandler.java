@@ -45,7 +45,8 @@ public class LeashTeleportHandler {
             ServerPlayer player = level.getServer().getPlayerList().getPlayer(playerUUID);
             if (player == null || player.isRemoved()) {
                 LeashedTeleportMod.LOGGER.warn(
-                    "[LeashedTeleport] Player {} not found when re-attaching leash to {}.",
+                    "[{}] Player {} not found when re-attaching leash to {}.",
+                    LeashedTeleportMod.MOD_NAME,
                     playerUUID, mob.getUUID());
                 return;
             }
@@ -54,7 +55,7 @@ public class LeashTeleportHandler {
             mob.setLeashedTo(player, true);
             applyProtection(mob, config.getDamageResistanceDuration());
             LeashedTeleportMod.LOGGER.debug(
-                "[LeashedTeleport] Leash re-attached to {} via ENTITY_LOAD event.", mob.getUUID());
+                "[{}] Leash re-attached to {} via ENTITY_LOAD event.", LeashedTeleportMod.MOD_NAME, mob.getUUID());
         });
     }
 
@@ -98,7 +99,8 @@ public class LeashTeleportHandler {
         LeashedTeleportConfig config = LeashedTeleportConfig.get();
         if (!PermissionManager.canUse(player)) {
             LeashedTeleportMod.LOGGER.debug(
-                    "[LeashedTeleport] Player {} lacks permission {}.",
+                    "[{}] Player {} lacks permission {}.",
+                    LeashedTeleportMod.MOD_NAME,
                     player.getName().getString(),
                     PermissionManager.USE_PERMISSION);
             return;
@@ -106,7 +108,7 @@ public class LeashTeleportHandler {
 
         WorldBorder border = targetLevel.getWorldBorder();
         if (!border.isWithinBounds(BlockPos.containing(x, y, z))) {
-            LeashedTeleportMod.LOGGER.debug("[LeashedTeleport] Destination outside world border. Skipping.");
+            LeashedTeleportMod.LOGGER.debug("[{}] Destination outside world border. Skipping.", LeashedTeleportMod.MOD_NAME);
             return;
         }
 
@@ -114,7 +116,8 @@ public class LeashTeleportHandler {
         BlockPos safePos = TeleportSafetyChecker.findSafeLocation(targetLevel, x, y, z);
         if (safePos == null) {
             LeashedTeleportMod.LOGGER.warn(
-                "[LeashedTeleport] No safe location found near destination ({}, {}, {}). Teleport cancelled for {} mob(s).",
+                "[{}] No safe location found near destination ({}, {}, {}). Teleport cancelled for {} mob(s).",
+                LeashedTeleportMod.MOD_NAME,
                 x, y, z, mobs.size());
             player.sendSystemMessage(Component.literal(
                 "[LeashedTeleport] Not enough space at destination – your leashed mob stayed behind."));
@@ -129,7 +132,8 @@ public class LeashTeleportHandler {
         boolean crossDim = originLevel != targetLevel;
         if (crossDim && !PermissionManager.canCrossDimensionTeleport(player)) {
             LeashedTeleportMod.LOGGER.debug(
-                    "[LeashedTeleport] Player {} lacks permission {}.",
+                    "[{}] Player {} lacks permission {}.",
+                    LeashedTeleportMod.MOD_NAME,
                     player.getName().getString(),
                     PermissionManager.CROSS_DIMENSION_TELEPORT_PERMISSION);
             return;
@@ -143,7 +147,7 @@ public class LeashTeleportHandler {
                     ((LeashableEntityAccessor) mob).leashedteleport_setLeashData(null);
                 }
             }
-            LeashedTeleportMod.LOGGER.debug("[LeashedTeleport] Cross-dimension teleport disabled. Leash released.");
+            LeashedTeleportMod.LOGGER.debug("[{}] Cross-dimension teleport disabled. Leash released.", LeashedTeleportMod.MOD_NAME);
             return;
         }
 
@@ -168,8 +172,8 @@ public class LeashTeleportHandler {
         }
 
         if (count > 0) {
-            LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Teleported {} leashed mob(s) with player {} to safe location {}.",
-                count, player.getName().getString(), safePos);
+            LeashedTeleportMod.LOGGER.debug("[{}] Teleported {} leashed mob(s) with player {} to safe location {}.",
+                LeashedTeleportMod.MOD_NAME, count, player.getName().getString(), safePos);
         }
     }
 

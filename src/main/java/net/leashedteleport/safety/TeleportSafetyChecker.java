@@ -31,7 +31,8 @@ public class TeleportSafetyChecker {
             return targetPos;
         }
 
-        LeashedTeleportMod.LOGGER.debug("[LeashedTeleport] Target position {} is unsafe, searching for safe alternative...", targetPos);
+        LeashedTeleportMod.LOGGER.debug("[{}] Target position {} is unsafe, searching for safe alternative...",
+                LeashedTeleportMod.MOD_NAME, targetPos);
 
         // Search in expanding radius for a safe spot
         for (int dy = 0; dy <= SEARCH_RADIUS_VERTICAL; dy++) {
@@ -39,8 +40,8 @@ public class TeleportSafetyChecker {
                 for (int dz = -SEARCH_RADIUS_HORIZONTAL; dz <= SEARCH_RADIUS_HORIZONTAL; dz++) {
                     BlockPos candidate = targetPos.offset(dx, dy, dz);
                     if (isSafeLocation(level, candidate)) {
-                        LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Found safe location at {} (offset from target: {}, {}, {})", 
-                            candidate, dx, dy, dz);
+                        LeashedTeleportMod.LOGGER.debug("[{}] Found safe location at {} (offset from target: {}, {}, {})",
+                            LeashedTeleportMod.MOD_NAME, candidate, dx, dy, dz);
                         return candidate;
                     }
                 }
@@ -53,15 +54,15 @@ public class TeleportSafetyChecker {
                 for (int dz = -SEARCH_RADIUS_HORIZONTAL; dz <= SEARCH_RADIUS_HORIZONTAL; dz++) {
                     BlockPos candidate = targetPos.offset(dx, dy, dz);
                     if (isSafeLocation(level, candidate)) {
-                        LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Found safe location at {} (offset from target: {}, {}, {})", 
-                            candidate, dx, dy, dz);
+                        LeashedTeleportMod.LOGGER.debug("[{}] Found safe location at {} (offset from target: {}, {}, {})",
+                            LeashedTeleportMod.MOD_NAME, candidate, dx, dy, dz);
                         return candidate;
                     }
                 }
             }
         }
 
-        LeashedTeleportMod.LOGGER.warn("[LeashedTeleport] No safe location found near {}", targetPos);
+        LeashedTeleportMod.LOGGER.warn("[{}] No safe location found near {}", LeashedTeleportMod.MOD_NAME, targetPos);
         return null;
     }
 

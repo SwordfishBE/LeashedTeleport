@@ -14,6 +14,10 @@ import org.slf4j.LoggerFactory;
 public class LeashedTeleportMod implements ModInitializer {
 
     public static final String MOD_ID = "leashedteleport";
+    public static final String MOD_NAME = FabricLoader.getInstance()
+            .getModContainer(MOD_ID)
+            .map(container -> container.getMetadata().getName())
+            .orElse("Leashed Teleport");
     public static final String VERSION = FabricLoader.getInstance()
             .getModContainer(MOD_ID)
             .map(container -> container.getMetadata().getVersion().getFriendlyString())
@@ -27,7 +31,7 @@ public class LeashedTeleportMod implements ModInitializer {
         LeashedTeleportCommand.register();
         LeashTeleportHandler.registerEvents();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> ModrinthUpdateChecker.checkOnceAsync());
-        LOGGER.info("[LeashedTeleport] Mod initialized. Version: {}", VERSION);
+        LOGGER.info("[{}] Mod initialized. Version: {}", MOD_NAME, VERSION);
     }
 
     public static LeashedTeleportConfig loadConfigForEditing() {

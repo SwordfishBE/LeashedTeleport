@@ -45,7 +45,7 @@ public class LeashedTeleportConfig {
 
     public static void load() {
         if (!Files.exists(CONFIG_PATH)) {
-            LeashedTeleportMod.LOGGER.info("[LeashedTeleport] No config found, creating default.");
+            LeashedTeleportMod.LOGGER.debug("[{}] No config found, creating default.", LeashedTeleportMod.MOD_NAME);
             instance.normalize();
             save();
             return;
@@ -56,9 +56,9 @@ public class LeashedTeleportConfig {
             instance = (loaded != null) ? loaded : new LeashedTeleportConfig();
             instance.normalize();
             save();
-            LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Config loaded successfully.");
+            LeashedTeleportMod.LOGGER.debug("[{}] Config loaded successfully.", LeashedTeleportMod.MOD_NAME);
         } catch (IOException | JsonSyntaxException e) {
-            LeashedTeleportMod.LOGGER.error("[LeashedTeleport] Failed to load config: {}", e.getMessage());
+            LeashedTeleportMod.LOGGER.error("[{}] Failed to load config: {}", LeashedTeleportMod.MOD_NAME, e.getMessage());
             instance = new LeashedTeleportConfig();
             instance.normalize();
         }
@@ -80,7 +80,7 @@ public class LeashedTeleportConfig {
             Files.createDirectories(CONFIG_PATH.getParent());
             Files.writeString(CONFIG_PATH, buildCommentedConfig(instance));
         } catch (IOException e) {
-            LeashedTeleportMod.LOGGER.error("[LeashedTeleport] Failed to save config: {}", e.getMessage());
+            LeashedTeleportMod.LOGGER.error("[{}] Failed to save config: {}", LeashedTeleportMod.MOD_NAME, e.getMessage());
         }
     }
 

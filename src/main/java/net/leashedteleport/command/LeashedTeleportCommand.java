@@ -48,8 +48,8 @@ public class LeashedTeleportCommand {
                                 ctx.getSource().sendSuccess(() -> Component.literal(
                                         "§a[LeashedTeleport] Config reloaded successfully."
                                 ), true);
-                                LeashedTeleportMod.LOGGER.info("[LeashedTeleport] Config reloaded by {}.",
-                                        ctx.getSource().getTextName());
+                                LeashedTeleportMod.LOGGER.info("[{}] Config reloaded via command.",
+                                        LeashedTeleportMod.MOD_NAME);
                                 return 1;
                             }));
 
