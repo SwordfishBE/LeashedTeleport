@@ -62,12 +62,13 @@ public class LeashTeleportHandler {
     public static List<Mob> collectEligibleMobs(ServerPlayer player) {
         LeashedTeleportConfig config = LeashedTeleportConfig.get();
         double radius = config.getLeashRadius();
+        double radiusSqr = radius * radius;
         ServerLevel level = (ServerLevel) player.level();
 
         AABB searchBox = player.getBoundingBox().inflate(radius);
         List<Mob> eligible = new ArrayList<>();
         for (Mob mob : level.getEntitiesOfClass(Mob.class, searchBox)) {
-            if (isEligible(mob, player, config)) {
+            if (mob.distanceToSqr(player) <= radiusSqr && isEligible(mob, player, config)) {
                 eligible.add(mob);
             }
         }
@@ -163,7 +164,19 @@ public class LeashTeleportHandler {
                 ((LeashableEntityAccessor) mob).leashedteleport_setLeashData(null);
                 applyProtection(mob, config.getDamageResistanceDuration());
                 // Teleport mob to target level — ENTITY_LOAD event handles leash re-attach when mob arrives
-                mob.teleportTo(targetLevel, safeX, safeY, safeZ, Set.of(), mob.getYRot(), mob.getXRot(), false);
+                boolean teleported = mob.teleportTo(targetLevel, safeX, safeY, safeZ, Set.of(), mob.getYRot(), mob.getXRot(), false);
+                if (!teleported) {
+                    PENDING_LEASH.remove(mobUUID);
+                    if (!player.isRemoved() && !mob.isRemoved()) {
+                        mob.setLeashedTo(player, true);
+                    }
+                    LeashedTeleportMod.LOGGER.warn(
+                        "[{}] Failed to teleport leashed mob {} to destination level. Restored leash to player {}.",
+                        LeashedTeleportMod.MOD_NAME,
+                        mobUUID,
+                        player.getUUID());
+                    continue;
+                }
             } else {
                 mob.snapTo(safeX, safeY, safeZ, mob.getYRot(), mob.getXRot());
                 applyProtection(mob, config.getDamageResistanceDuration());

@@ -6,6 +6,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 
@@ -25,9 +26,10 @@ public class TeleportSafetyChecker {
      */
     public static BlockPos findSafeLocation(ServerLevel level, double x, double y, double z) {
         BlockPos targetPos = BlockPos.containing(x, y, z);
+        WorldBorder border = level.getWorldBorder();
         
         // First check if the target position itself is safe
-        if (isSafeLocation(level, targetPos)) {
+        if (isSafeLocation(level, targetPos, border)) {
             return targetPos;
         }
 
@@ -39,7 +41,7 @@ public class TeleportSafetyChecker {
             for (int dx = -SEARCH_RADIUS_HORIZONTAL; dx <= SEARCH_RADIUS_HORIZONTAL; dx++) {
                 for (int dz = -SEARCH_RADIUS_HORIZONTAL; dz <= SEARCH_RADIUS_HORIZONTAL; dz++) {
                     BlockPos candidate = targetPos.offset(dx, dy, dz);
-                    if (isSafeLocation(level, candidate)) {
+                    if (isSafeLocation(level, candidate, border)) {
                         LeashedTeleportMod.LOGGER.debug("[{}] Found safe location at {} (offset from target: {}, {}, {})",
                             LeashedTeleportMod.MOD_NAME, candidate, dx, dy, dz);
                         return candidate;
@@ -53,7 +55,7 @@ public class TeleportSafetyChecker {
             for (int dx = -SEARCH_RADIUS_HORIZONTAL; dx <= SEARCH_RADIUS_HORIZONTAL; dx++) {
                 for (int dz = -SEARCH_RADIUS_HORIZONTAL; dz <= SEARCH_RADIUS_HORIZONTAL; dz++) {
                     BlockPos candidate = targetPos.offset(dx, dy, dz);
-                    if (isSafeLocation(level, candidate)) {
+                    if (isSafeLocation(level, candidate, border)) {
                         LeashedTeleportMod.LOGGER.debug("[{}] Found safe location at {} (offset from target: {}, {}, {})",
                             LeashedTeleportMod.MOD_NAME, candidate, dx, dy, dz);
                         return candidate;
@@ -69,7 +71,7 @@ public class TeleportSafetyChecker {
     /**
      * Check if a specific position is safe to teleport to.
      */
-    private static boolean isSafeLocation(ServerLevel level, BlockPos pos) {
+    private static boolean isSafeLocation(ServerLevel level, BlockPos pos, WorldBorder border) {
         // Check void (below minimum build height)
         if (pos.getY() < level.getMinY()) {
             return false;
@@ -83,6 +85,10 @@ public class TeleportSafetyChecker {
         BlockPos feetPos = pos;
         BlockPos headPos = pos.above();
         BlockPos groundPos = pos.below();
+
+        if (!border.isWithinBounds(feetPos) || !border.isWithinBounds(headPos) || !border.isWithinBounds(groundPos)) {
+            return false;
+        }
 
         BlockState feetState = level.getBlockState(feetPos);
         BlockState headState = level.getBlockState(headPos);
