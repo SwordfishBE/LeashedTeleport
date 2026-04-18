@@ -24,6 +24,8 @@ public class LeashedTeleportConfig {
     public double leash_radius = 10.0;
     public boolean useLuckPerms = false;
     public boolean cross_dimension_teleport = true;
+    public boolean ender_pearl_teleport = true;
+    public boolean chorus_fruit_teleport = true;
     public int damage_resistance_duration_ticks = 100;
     public List<String> entity_blacklist = new ArrayList<>();
 
@@ -31,6 +33,8 @@ public class LeashedTeleportConfig {
     public double getLeashRadius() { return leash_radius; }
     public boolean isUseLuckPerms() { return useLuckPerms; }
     public boolean isCrossDimensionTeleport() { return cross_dimension_teleport; }
+    public boolean isEnderPearlTeleport() { return ender_pearl_teleport; }
+    public boolean isChorusFruitTeleport() { return chorus_fruit_teleport; }
     public int getDamageResistanceDuration() { return Math.max(1, damage_resistance_duration_ticks); }
     public List<String> getBlacklist() { return entity_blacklist != null ? entity_blacklist : new ArrayList<>(); }
     public LeashedTeleportConfig copy() {
@@ -38,6 +42,8 @@ public class LeashedTeleportConfig {
         copy.leash_radius = leash_radius;
         copy.useLuckPerms = useLuckPerms;
         copy.cross_dimension_teleport = cross_dimension_teleport;
+        copy.ender_pearl_teleport = ender_pearl_teleport;
+        copy.chorus_fruit_teleport = chorus_fruit_teleport;
         copy.damage_resistance_duration_ticks = damage_resistance_duration_ticks;
         copy.entity_blacklist = entity_blacklist != null ? new ArrayList<>(entity_blacklist) : new ArrayList<>();
         return copy;
@@ -121,6 +127,10 @@ public class LeashedTeleportConfig {
                 .append(", // When true, Leashed Teleport checks LuckPerms permission nodes if LuckPerms is installed.\n");
         builder.append("  \"cross_dimension_teleport\": ").append(config.cross_dimension_teleport)
                 .append(", // Allow leashed mobs to follow you between dimensions such as the Overworld, Nether, and End.\n");
+        builder.append("  \"ender_pearl_teleport\": ").append(config.ender_pearl_teleport)
+                .append(", // Allow ender pearls to teleport your leashed mobs with you. Disable for vanilla pearl behaviour.\n");
+        builder.append("  \"chorus_fruit_teleport\": ").append(config.chorus_fruit_teleport)
+                .append(", // Allow chorus fruit to teleport your leashed mobs with you. Disable for vanilla chorus fruit behaviour.\n");
         builder.append("  \"damage_resistance_duration_ticks\": ").append(config.damage_resistance_duration_ticks)
                 .append(", // Duration of Damage Resistance V and Slow Falling after teleport. 20 ticks = 1 second.\n");
         builder.append("  \"entity_blacklist\": ");

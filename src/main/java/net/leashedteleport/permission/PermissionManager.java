@@ -11,6 +11,10 @@ public final class PermissionManager {
     public static final String USE_PERMISSION = "leashedteleport.use";
     public static final String CROSS_DIMENSION_TELEPORT_PERMISSION =
             "leashedteleport.crossdimensionteleport";
+    public static final String ENDER_PEARL_TELEPORT_PERMISSION =
+            "leashedteleport.enderpearlteleport";
+    public static final String CHORUS_FRUIT_TELEPORT_PERMISSION =
+            "leashedteleport.chorusfruitteleport";
 
     private static boolean luckPermsInstalled;
     private static boolean luckPermsActive;
@@ -51,5 +55,13 @@ public final class PermissionManager {
 
     public static boolean canCrossDimensionTeleport(ServerPlayer player) {
         return !luckPermsActive || Permissions.check(player, CROSS_DIMENSION_TELEPORT_PERMISSION, false);
+    }
+
+    public static boolean canEnderPearlTeleport(ServerPlayer player) {
+        return !luckPermsActive || Permissions.check(player, ENDER_PEARL_TELEPORT_PERMISSION, false);
+    }
+
+    public static boolean canChorusFruitTeleport(ServerPlayer player) {
+        return !luckPermsActive || Permissions.check(player, CHORUS_FRUIT_TELEPORT_PERMISSION, false);
     }
 }

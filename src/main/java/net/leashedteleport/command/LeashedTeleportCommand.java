@@ -32,8 +32,12 @@ public class LeashedTeleportCommand {
                                         "§eUse LuckPerms:              §f" + cfg.isUseLuckPerms() + "\n" +
                                         "§eLeash radius:                §f" + cfg.getLeashRadius() + " blocks\n" +
                                         "§eCross-dimension teleport:    §f" + cfg.isCrossDimensionTeleport() + "\n" +
+                                        "§eEnder pearl teleport:        §f" + cfg.isEnderPearlTeleport() + "\n" +
+                                        "§eChorus fruit teleport:       §f" + cfg.isChorusFruitTeleport() + "\n" +
                                         "§eUse permission:              §f" + PermissionManager.USE_PERMISSION + "\n" +
                                         "§eCross-dim permission:        §f" + PermissionManager.CROSS_DIMENSION_TELEPORT_PERMISSION + "\n" +
+                                        "§ePearl permission:            §f" + PermissionManager.ENDER_PEARL_TELEPORT_PERMISSION + "\n" +
+                                        "§eChorus permission:           §f" + PermissionManager.CHORUS_FRUIT_TELEPORT_PERMISSION + "\n" +
                                         "§eDamage resistance duration:  §f" + cfg.getDamageResistanceDuration() + " ticks\n" +
                                         "§eBlacklisted entities:        §f" + blacklistInfo
                                 ), false);

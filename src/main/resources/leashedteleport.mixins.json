@@ -4,7 +4,9 @@
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "ServerPlayerTeleportMixin",
-    "LeashableEntityAccessor"
+    "LeashableEntityAccessor",
+    "ThrownEnderpearlMixin",
+    "TeleportRandomlyConsumeEffectMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -3,25 +3,57 @@ package net.leashedteleport.mixin;
 import net.leashedteleport.handler.LeashTeleportHandler;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Relative;
+import net.minecraft.world.level.portal.TeleportTransition;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 @Mixin(ServerPlayer.class)
 public abstract class ServerPlayerTeleportMixin {
 
-    private static final Map<UUID, List<Mob>>   PENDING_MOBS  = new HashMap<>();
-    private static final Map<UUID, ServerLevel> ORIGIN_LEVELS = new HashMap<>();
+    @Inject(
+        method = "teleport(Lnet/minecraft/world/level/portal/TeleportTransition;)Lnet/minecraft/server/level/ServerPlayer;",
+        at = @At("HEAD")
+    )
+    private void leashedteleport_captureTransitionPreTeleport(
+            TeleportTransition transition,
+            CallbackInfoReturnable<ServerPlayer> cir
+    ) {
+        if (transition.asPassenger()) {
+            return;
+        }
+
+        ServerPlayer self = (ServerPlayer) (Object) this;
+        LeashTeleportHandler.capturePendingTeleport(self);
+    }
+
+    @Inject(
+        method = "teleport(Lnet/minecraft/world/level/portal/TeleportTransition;)Lnet/minecraft/server/level/ServerPlayer;",
+        at = @At("RETURN")
+    )
+    private void leashedteleport_handleTransitionPostTeleport(
+            TeleportTransition transition,
+            CallbackInfoReturnable<ServerPlayer> cir
+    ) {
+        ServerPlayer self = (ServerPlayer) (Object) this;
+        ServerPlayer result = cir.getReturnValue();
+        if (result == null) {
+            LeashTeleportHandler.clearPendingTeleport(self);
+            return;
+        }
+
+        LeashTeleportHandler.schedulePendingTeleport(
+                result,
+                transition.newLevel(),
+                transition.position().x,
+                transition.position().y,
+                transition.position().z
+        );
+    }
 
     @Inject(
         method = "teleportTo(Lnet/minecraft/server/level/ServerLevel;DDDLjava/util/Set;FFZ)Z",
@@ -33,9 +65,7 @@ public abstract class ServerPlayerTeleportMixin {
             CallbackInfoReturnable<Boolean> cir) {
 
         ServerPlayer self = (ServerPlayer) (Object) this;
-        UUID uuid = self.getUUID();
-        ORIGIN_LEVELS.put(uuid, (ServerLevel) self.level());
-        PENDING_MOBS.put(uuid, new ArrayList<>(LeashTeleportHandler.collectEligibleMobs(self)));
+        LeashTeleportHandler.capturePendingTeleport(self);
     }
 
     @Inject(
@@ -48,18 +78,11 @@ public abstract class ServerPlayerTeleportMixin {
             CallbackInfoReturnable<Boolean> cir) {
 
         ServerPlayer self = (ServerPlayer) (Object) this;
-        UUID uuid = self.getUUID();
-
         if (!cir.getReturnValue()) {
-            PENDING_MOBS.remove(uuid);
-            ORIGIN_LEVELS.remove(uuid);
+            LeashTeleportHandler.clearPendingTeleport(self);
             return;
         }
 
-        List<Mob>   mobs        = PENDING_MOBS.remove(uuid);
-        ServerLevel originLevel = ORIGIN_LEVELS.remove(uuid);
-        if (mobs == null || mobs.isEmpty() || originLevel == null) return;
-
-        LeashTeleportHandler.teleportMobs(self, originLevel, level, x, y, z, mobs);
+        LeashTeleportHandler.handlePendingTeleport(self, level, x, y, z);
     }
 }

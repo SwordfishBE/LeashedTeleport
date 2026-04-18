@@ -44,6 +44,18 @@ final class LeashedTeleportClothConfigScreen {
                 .setSaveConsumer(value -> config.cross_dimension_teleport = value)
                 .build());
 
+        compatibility.addEntry(entries.startBooleanToggle(Component.literal("Ender Pearl Teleport"), config.ender_pearl_teleport)
+                .setDefaultValue(true)
+                .setTooltip(Component.literal("Allow ender pearls to teleport your leashed mobs with you. Disable this for vanilla pearl behaviour."))
+                .setSaveConsumer(value -> config.ender_pearl_teleport = value)
+                .build());
+
+        compatibility.addEntry(entries.startBooleanToggle(Component.literal("Chorus Fruit Teleport"), config.chorus_fruit_teleport)
+                .setDefaultValue(true)
+                .setTooltip(Component.literal("Allow chorus fruit to teleport your leashed mobs with you. Disable this for vanilla chorus fruit behaviour."))
+                .setSaveConsumer(value -> config.chorus_fruit_teleport = value)
+                .build());
+
         compatibility.addEntry(entries.startBooleanToggle(Component.literal("Use LuckPerms"), config.useLuckPerms)
                 .setDefaultValue(false)
                 .setTooltip(Component.literal("Enable permission node checks when the LuckPerms mod is installed."))

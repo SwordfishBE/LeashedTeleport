@@ -10,6 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -17,6 +18,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.level.border.WorldBorder;
+import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
@@ -28,12 +30,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class LeashTeleportHandler {
 
+    private record PendingTeleport(ServerLevel originLevel, List<Mob> mobs) {}
+
     /**
      * Pending leash re-attachments: mob UUID -> player UUID.
      * When ENTITY_LOAD fires for a mob whose UUID is in this map,
      * we immediately re-attach the leash to the correct player.
      */
     private static final Map<UUID, UUID> PENDING_LEASH = new ConcurrentHashMap<>();
+    private static final Map<UUID, PendingTeleport> PENDING_TELEPORTS = new ConcurrentHashMap<>();
 
     /** Register the ENTITY_LOAD listener once at startup. */
     public static void registerEvents() {
@@ -73,6 +78,54 @@ public class LeashTeleportHandler {
             }
         }
         return eligible;
+    }
+
+    public static void capturePendingTeleport(ServerPlayer player) {
+        if (PENDING_TELEPORTS.containsKey(player.getUUID())) {
+            return;
+        }
+
+        List<Mob> mobs = collectEligibleMobs(player);
+        if (mobs.isEmpty()) {
+            PENDING_TELEPORTS.remove(player.getUUID());
+            return;
+        }
+
+        PENDING_TELEPORTS.put(player.getUUID(), new PendingTeleport((ServerLevel) player.level(), mobs));
+    }
+
+    public static void clearPendingTeleport(ServerPlayer player) {
+        PENDING_TELEPORTS.remove(player.getUUID());
+    }
+
+    public static void handlePendingTeleport(ServerPlayer player, ServerLevel targetLevel,
+                                             double x, double y, double z) {
+        PendingTeleport pendingTeleport = PENDING_TELEPORTS.remove(player.getUUID());
+        if (pendingTeleport == null || pendingTeleport.mobs().isEmpty()) {
+            return;
+        }
+
+        teleportMobs(player, pendingTeleport.originLevel(), targetLevel, x, y, z, pendingTeleport.mobs());
+    }
+
+    public static void schedulePendingTeleport(ServerPlayer player, ServerLevel targetLevel,
+                                               double x, double y, double z) {
+        MinecraftServer server = targetLevel.getServer();
+        if (server == null) {
+            handlePendingTeleport(player, targetLevel, x, y, z);
+            return;
+        }
+
+        UUID playerUuid = player.getUUID();
+        server.execute(() -> {
+            ServerPlayer currentPlayer = server.getPlayerList().getPlayer(playerUuid);
+            if (currentPlayer == null || currentPlayer.isRemoved()) {
+                PENDING_TELEPORTS.remove(playerUuid);
+                return;
+            }
+
+            handlePendingTeleport(currentPlayer, targetLevel, x, y, z);
+        });
     }
 
     private static boolean isEligible(Mob mob, ServerPlayer player, LeashedTeleportConfig config) {
@@ -179,6 +232,9 @@ public class LeashTeleportHandler {
                 }
             } else {
                 mob.snapTo(safeX, safeY, safeZ, mob.getYRot(), mob.getXRot());
+                if (mob.getLeashHolder() != player) {
+                    mob.setLeashedTo(player, true);
+                }
                 applyProtection(mob, config.getDamageResistanceDuration());
             }
             count++;
