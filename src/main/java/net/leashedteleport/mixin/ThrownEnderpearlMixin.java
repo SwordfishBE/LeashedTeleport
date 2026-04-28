@@ -1,6 +1,7 @@
 package net.leashedteleport.mixin;
 
 import net.leashedteleport.config.LeashedTeleportConfig;
+import net.leashedteleport.compat.OpenPartiesAndClaimsCompat;
 import net.leashedteleport.handler.LeashTeleportHandler;
 import net.leashedteleport.permission.PermissionManager;
 import net.minecraft.server.level.ServerPlayer;
@@ -37,6 +38,6 @@ public class ThrownEnderpearlMixin {
             return;
         }
 
-        LeashTeleportHandler.capturePendingTeleport(player);
+        LeashTeleportHandler.capturePendingTeleport(player, OpenPartiesAndClaimsCompat.TeleportType.ENDER_PEARL);
     }
 }

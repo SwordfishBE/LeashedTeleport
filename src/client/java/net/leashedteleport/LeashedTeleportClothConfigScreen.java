@@ -56,6 +56,12 @@ final class LeashedTeleportClothConfigScreen {
                 .setSaveConsumer(value -> config.chorus_fruit_teleport = value)
                 .build());
 
+        compatibility.addEntry(entries.startBooleanToggle(Component.literal("Respect Open Parties and Claims"), config.respectOpenPartiesAndClaims)
+                .setDefaultValue(true)
+                .setTooltip(Component.literal("Respect OPAC claim protections for leashed mob teleports when Open Parties and Claims is installed."))
+                .setSaveConsumer(value -> config.respectOpenPartiesAndClaims = value)
+                .build());
+
         compatibility.addEntry(entries.startBooleanToggle(Component.literal("Use LuckPerms"), config.useLuckPerms)
                 .setDefaultValue(false)
                 .setTooltip(Component.literal("Enable permission node checks when the LuckPerms mod is installed."))

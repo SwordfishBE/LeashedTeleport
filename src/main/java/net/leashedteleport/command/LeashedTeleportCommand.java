@@ -34,6 +34,7 @@ public class LeashedTeleportCommand {
                                         "§eCross-dimension teleport:    §f" + cfg.isCrossDimensionTeleport() + "\n" +
                                         "§eEnder pearl teleport:        §f" + cfg.isEnderPearlTeleport() + "\n" +
                                         "§eChorus fruit teleport:       §f" + cfg.isChorusFruitTeleport() + "\n" +
+                                        "§eRespect OPAC:                §f" + cfg.isRespectOpenPartiesAndClaims() + "\n" +
                                         "§eUse permission:              §f" + PermissionManager.USE_PERMISSION + "\n" +
                                         "§eCross-dim permission:        §f" + PermissionManager.CROSS_DIMENSION_TELEPORT_PERMISSION + "\n" +
                                         "§ePearl permission:            §f" + PermissionManager.ENDER_PEARL_TELEPORT_PERMISSION + "\n" +

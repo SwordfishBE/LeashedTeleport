@@ -18,6 +18,7 @@ A Fabric mod for Minecraft that brings your leashed entities along when you tele
 - **Sitting entities supported** — sitting tamed animals teleport as long as they are leashed to and owned by the teleporting player.
 - **Cross-dimension support** — entities can optionally follow you across dimensions (Overworld ↔ Nether ↔ End). Enabled by default; toggleable in config.
 - **Optional LuckPerms integration** — enable permission nodes for general use, cross-dimension teleports, ender pearls, and chorus fruit when LuckPerms is installed.
+- **Optional Open Parties and Claims integration** — when OPAC is installed, leashed mobs respect claim access plus OPAC's teleport, ender pearl, and chorus fruit protection rules.
 - **World border aware** — if the destination is outside the world border, leashed entities are not teleported.
 - **Configurable blacklist** — define entity types that should never teleport, even if leashed to you.
 - **Optional Mod Menu integration** — when Mod Menu and Cloth Config are present on the client, you can edit the same config through an in-game screen.
@@ -49,6 +50,7 @@ If Mod Menu is installed on the client, Leashed Teleport exposes a config screen
   "cross_dimension_teleport": true, // Allow leashed mobs to follow you between dimensions such as the Overworld, Nether, and End.
   "ender_pearl_teleport": true, // Allow ender pearls to teleport your leashed mobs with you. Disable for vanilla pearl behaviour.
   "chorus_fruit_teleport": true, // Allow chorus fruit to teleport your leashed mobs with you. Disable for vanilla chorus fruit behaviour.
+  "respectOpenPartiesAndClaims": true, // Respect Open Parties and Claims protections when OPAC is installed.
   "damage_resistance_duration_ticks": 100, // Duration of Damage Resistance V and Slow Falling after teleport. 20 ticks = 1 second.
   "entity_blacklist": [] // Entity type IDs that should never teleport, even when leashed to you.
 }
@@ -61,6 +63,7 @@ If Mod Menu is installed on the client, Leashed Teleport exposes a config screen
 | `cross_dimension_teleport`         | boolean | `true`  | Allow mobs to follow across dimensions. Set to `false` to restrict to the current dimension. |
 | `ender_pearl_teleport`             | boolean | `true`  | Allow leashed mobs to follow ender pearl teleports. Set to `false` for vanilla pearl behaviour. |
 | `chorus_fruit_teleport`            | boolean | `true`  | Allow leashed mobs to follow chorus fruit teleports. Set to `false` for vanilla chorus fruit behaviour. |
+| `respectOpenPartiesAndClaims`      | boolean | `true`  | Respect OPAC claim protections when Open Parties and Claims is installed. |
 | `damage_resistance_duration_ticks` | int     | `100`   | Duration of Damage Resistance V + Slow Falling after teleport (20 ticks = 1 second).         |
 | `entity_blacklist`                 | list    | `[]`    | Entity type IDs that will never teleport. See example below.                                  |
 
@@ -75,6 +78,7 @@ Use the blacklist to exclude specific mobs — for example animals that are too 
   "cross_dimension_teleport": true,
   "ender_pearl_teleport": true,
   "chorus_fruit_teleport": true,
+  "respectOpenPartiesAndClaims": true,
   "damage_resistance_duration_ticks": 100,
   "entity_blacklist": [
     "minecraft:cow",
@@ -141,6 +145,16 @@ Official LuckPerms docs:
 - [LuckPerms Wiki](https://luckperms.net/wiki/Home)
 - [LuckPerms Command Usage](https://luckperms.net/wiki/Command-Usage)
 
+## 🛡️ Open Parties and Claims
+
+Open Parties and Claims is optional. Leashed Teleport does not depend on it directly, but when OPAC is installed and `respectOpenPartiesAndClaims` is `true`, leashed mobs will not be carried into claims that block the matching action.
+
+- `/tp` and other general player teleports require normal claim access.
+- Ender pearl mob-follow checks OPAC's Ender Pearls entity barrier group when that dynamic option exists.
+- Chorus fruit mob-follow respects OPAC's chorus fruit claim exception/protection option.
+
+Set `respectOpenPartiesAndClaims` to `false` if you want Leashed Teleport to ignore OPAC claim rules.
+
 ---
 
 ## 🧑‍🤝‍🧑 Compatibility
@@ -162,7 +176,7 @@ Official LuckPerms docs:
 - The safety system checks for hazards like lava, fire, void, and suffocation. If the exact teleport destination is unsafe, the mod searches within a 5-block radius for a safe alternative. This prevents accidental mob deaths from teleporting into dangerous locations.
 - The mod must be installed server-side. Players do not need to install the mod on their client. This mod does work in single-player.
 - Mod Menu and Cloth Config are purely optional client-side extras. A dedicated server does not need them.
-- `/leashedteleport info` is operator-only and shows whether LuckPerms is `disabled`, `configured, but mod not installed`, or `active`.
+- `/leashedteleport info` is operator-only and shows whether LuckPerms is `disabled`, `configured, but mod not installed`, or `active`, plus whether OPAC checks are enabled.
 
 ---
 

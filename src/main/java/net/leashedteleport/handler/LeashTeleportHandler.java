@@ -2,6 +2,7 @@ package net.leashedteleport.handler;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.leashedteleport.LeashedTeleportMod;
+import net.leashedteleport.compat.OpenPartiesAndClaimsCompat;
 import net.leashedteleport.config.LeashedTeleportConfig;
 import net.leashedteleport.mixin.LeashableEntityAccessor;
 import net.leashedteleport.permission.PermissionManager;
@@ -30,7 +31,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class LeashTeleportHandler {
 
-    private record PendingTeleport(ServerLevel originLevel, List<Mob> mobs) {}
+    private record PendingTeleport(
+            ServerLevel originLevel,
+            List<Mob> mobs,
+            OpenPartiesAndClaimsCompat.TeleportType teleportType
+    ) {}
 
     /**
      * Pending leash re-attachments: mob UUID -> player UUID.
@@ -81,6 +86,13 @@ public class LeashTeleportHandler {
     }
 
     public static void capturePendingTeleport(ServerPlayer player) {
+        capturePendingTeleport(player, OpenPartiesAndClaimsCompat.TeleportType.GENERAL);
+    }
+
+    public static void capturePendingTeleport(
+            ServerPlayer player,
+            OpenPartiesAndClaimsCompat.TeleportType teleportType
+    ) {
         if (PENDING_TELEPORTS.containsKey(player.getUUID())) {
             return;
         }
@@ -91,7 +103,7 @@ public class LeashTeleportHandler {
             return;
         }
 
-        PENDING_TELEPORTS.put(player.getUUID(), new PendingTeleport((ServerLevel) player.level(), mobs));
+        PENDING_TELEPORTS.put(player.getUUID(), new PendingTeleport((ServerLevel) player.level(), mobs, teleportType));
     }
 
     public static void clearPendingTeleport(ServerPlayer player) {
@@ -105,7 +117,16 @@ public class LeashTeleportHandler {
             return;
         }
 
-        teleportMobs(player, pendingTeleport.originLevel(), targetLevel, x, y, z, pendingTeleport.mobs());
+        teleportMobs(
+                player,
+                pendingTeleport.originLevel(),
+                targetLevel,
+                x,
+                y,
+                z,
+                pendingTeleport.mobs(),
+                pendingTeleport.teleportType()
+        );
     }
 
     public static void schedulePendingTeleport(ServerPlayer player, ServerLevel targetLevel,
@@ -148,6 +169,28 @@ public class LeashTeleportHandler {
 
     public static void teleportMobs(ServerPlayer player, ServerLevel originLevel, ServerLevel targetLevel,
                                     double x, double y, double z, List<Mob> mobs) {
+        teleportMobs(
+                player,
+                originLevel,
+                targetLevel,
+                x,
+                y,
+                z,
+                mobs,
+                OpenPartiesAndClaimsCompat.TeleportType.GENERAL
+        );
+    }
+
+    public static void teleportMobs(
+            ServerPlayer player,
+            ServerLevel originLevel,
+            ServerLevel targetLevel,
+            double x,
+            double y,
+            double z,
+            List<Mob> mobs,
+            OpenPartiesAndClaimsCompat.TeleportType teleportType
+    ) {
         if (mobs.isEmpty()) return;
 
         LeashedTeleportConfig config = LeashedTeleportConfig.get();
@@ -205,6 +248,17 @@ public class LeashTeleportHandler {
             return;
         }
 
+        if (!canTeleportIntoClaim(player, targetLevel, safePos, teleportType)) {
+            LeashedTeleportMod.LOGGER.debug(
+                    "[{}] Open Parties and Claims blocked leashed mob teleport for player {} to {}.",
+                    LeashedTeleportMod.MOD_NAME,
+                    player.getName().getString(),
+                    safePos
+            );
+            player.sendSystemMessage(Component.literal(opacBlockedMessage(teleportType)));
+            return;
+        }
+
         int count = 0;
         for (Mob mob : mobs) {
             if (mob.isRemoved()) continue;
@@ -249,5 +303,26 @@ public class LeashTeleportHandler {
     private static void applyProtection(Mob mob, int durationTicks) {
         mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, durationTicks, 4, false, false));
         mob.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, durationTicks, 0, false, false));
+    }
+
+    private static boolean canTeleportIntoClaim(
+            ServerPlayer player,
+            ServerLevel level,
+            BlockPos pos,
+            OpenPartiesAndClaimsCompat.TeleportType teleportType
+    ) {
+        LeashedTeleportConfig config = LeashedTeleportConfig.get();
+        if (!config.isRespectOpenPartiesAndClaims()) {
+            return true;
+        }
+        return OpenPartiesAndClaimsCompat.canTeleportInto(level, pos, player, teleportType);
+    }
+
+    private static String opacBlockedMessage(OpenPartiesAndClaimsCompat.TeleportType teleportType) {
+        return switch (teleportType) {
+            case ENDER_PEARL -> "[LeashedTeleport] Open Parties and Claims blocks leashed ender pearl entry into this claim.";
+            case CHORUS_FRUIT -> "[LeashedTeleport] Open Parties and Claims blocks leashed chorus fruit entry into this claim.";
+            case GENERAL -> "[LeashedTeleport] Open Parties and Claims blocks your leashed mob from entering this claim.";
+        };
     }
 }
