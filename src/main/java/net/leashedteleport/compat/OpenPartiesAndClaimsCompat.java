@@ -48,8 +48,8 @@ public final class OpenPartiesAndClaimsCompat {
             }
 
             Object protection = api.getClass().getMethod("getChunkProtection").invoke(api);
-            Object claimConfig = getClaimConfig(protection, claim);
-            if (hasChunkAccess(protection, claimConfig, player)) {
+            Object claimConfig = getClaimConfig(protection, claim, level.dimension().identifier());
+            if (hasChunkAccess(protection, claimConfig, player, level, pos)) {
                 return true;
             }
 
@@ -108,17 +108,27 @@ public final class OpenPartiesAndClaimsCompat {
         return invokeBooleanByNameAndArgCount(protection, "checkPlayerGroupExceptionOption", 3, option, claimConfig, player);
     }
 
-    private static Object getClaimConfig(Object protection, Object claim) throws ReflectiveOperationException {
+    private static Object getClaimConfig(Object protection, Object claim, Object dimension) throws ReflectiveOperationException {
         try {
-            return invokeByNameAndArgCount(protection, "getConfig", 1, claim);
+            return invokeByNameAndArgCount(protection, "getConfig", 2, claim, dimension);
         } catch (NoSuchMethodException e) {
-            return invokeByNameAndArgCount(protection, "getClaimConfig", 1, claim);
+            try {
+                return invokeByNameAndArgCount(protection, "getConfig", 1, claim);
+            } catch (NoSuchMethodException legacy) {
+                return invokeByNameAndArgCount(protection, "getClaimConfig", 1, claim);
+            }
         }
     }
 
-    private static boolean hasChunkAccess(Object protection, Object claimConfig, ServerPlayer player)
+    private static boolean hasChunkAccess(Object protection, Object claimConfig, ServerPlayer player,
+                                          ServerLevel level, BlockPos pos)
             throws ReflectiveOperationException {
-        return invokeBooleanByNameAndArgCount(protection, "hasChunkAccess", 2, claimConfig, player);
+        try {
+            return invokeBooleanByNameAndArgCount(protection, "hasChunkAccess", 5,
+                    claimConfig, player, level.dimension().identifier(), pos.getX() >> 4, pos.getZ() >> 4);
+        } catch (NoSuchMethodException e) {
+            return invokeBooleanByNameAndArgCount(protection, "hasChunkAccess", 2, claimConfig, player);
+        }
     }
 
     private static Object invokeChunkClaimLookup(Object claimsManager, Object dimensionId, BlockPos pos)
@@ -164,7 +174,9 @@ public final class OpenPartiesAndClaimsCompat {
 
         Class<?>[] parameterTypes = method.getParameterTypes();
         for (int i = 0; i < parameterTypes.length; i++) {
-            if (args[i] != null && !parameterTypes[i].isInstance(args[i])) {
+            Class<?> parameterType = parameterTypes[i];
+            if (parameterType == int.class) parameterType = Integer.class;
+            if (args[i] != null && !parameterType.isInstance(args[i])) {
                 return false;
             }
         }

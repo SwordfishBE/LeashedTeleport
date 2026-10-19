@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "leashedteleport_compat_test",
+  "version": "1.0.0",
+  "name": "LeashedTeleport Compatibility Probe",
+  "environment": "server",
+  "entrypoints": { "main": ["net.leashedteleport.compat.CompatibilityProbe"] },
+  "depends": { "leashedteleport": "*", "luckperms": "*", "openpartiesandclaims": "*" }
+}

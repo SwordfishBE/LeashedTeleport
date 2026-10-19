@@ -1,0 +1,40 @@
+// Opt-in live compatibility probe. External mods stay outside the release artifact.
+sourceSets {
+    compatTest {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+
+tasks.matching { it.name == 'runCompatTestServer' }.configureEach {
+    def result = file('.validation/server/compat-result.txt')
+    doFirst { if (result.exists()) result.delete() }
+    doLast {
+        if (!result.exists() || !result.text.startsWith('PASS\n')) {
+            throw new GradleException('Live compatibility probe failed. See .validation/server/compat-result.txt')
+        }
+    }
+}
+
+configurations {
+    compatTestImplementation.extendsFrom implementation
+    compatTestRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    compatTestImplementation fileTree('.validation/mods') { include '*.jar' }
+}
+
+loom {
+    mods {
+        leashedteleport_compat_test { sourceSet sourceSets.compatTest }
+    }
+    runs {
+        compatTestServer {
+            server()
+            source sourceSets.compatTest
+            runDir '.validation/server'
+            programArg '--nogui'
+        }
+    }
+}

@@ -1,4 +1,5 @@
 .gradle/
+.validation/
 build/
 .idea/
 *.iml
