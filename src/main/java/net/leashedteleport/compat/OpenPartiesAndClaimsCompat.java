@@ -1,6 +1,7 @@
 package net.leashedteleport.compat;
 
 import net.leashedteleport.LeashedTeleportMod;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,11 +33,12 @@ public final class OpenPartiesAndClaimsCompat {
     }
 
     public static boolean canTeleportInto(ServerLevel level, BlockPos pos, ServerPlayer player, TeleportType teleportType) {
+        if (!FabricLoader.getInstance().isModLoaded("openpartiesandclaims")) return true;
         try {
             Class<?> serverApiClass = Class.forName(SERVER_API_CLASS);
             Object api = invokeStaticByNameAndArgCount(serverApiClass, "get", 1, level.getServer());
             if (api == null) {
-                return true;
+                return false;
             }
 
             Object claimsManager = api.getClass().getMethod("getServerClaimsManager").invoke(api);
@@ -56,18 +58,16 @@ public final class OpenPartiesAndClaimsCompat {
                 case ENDER_PEARL -> allowsEnderPearl(api, protection, claimConfig, player);
                 case GENERAL -> false;
             };
-        } catch (ClassNotFoundException e) {
-            return true;
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             if (!loggedFailure) {
                 loggedFailure = true;
                 LeashedTeleportMod.LOGGER.warn(
-                        "[{}] Open Parties and Claims protection checks failed. Leashed Teleport will not use OPAC claim rules until this is fixed.",
+                        "[{}] Open Parties and Claims protection checks failed. Leashed mob teleports are blocked until this is fixed or OPAC checks are disabled in the config.",
                         LeashedTeleportMod.MOD_NAME,
                         e
                 );
             }
-            return true;
+            return false;
         }
     }
 
@@ -80,7 +80,7 @@ public final class OpenPartiesAndClaimsCompat {
 
         Object v1Option = getStaticFieldIfPresent(PLAYER_CONFIG_OPTIONS_V1_CLASS, CHORUS_PROTECTION_FIELD);
         if (v1Option == null) {
-            return true;
+            return false;
         }
 
         boolean protectedAgainst = invokeBooleanByNameAndArgCount(
@@ -94,7 +94,7 @@ public final class OpenPartiesAndClaimsCompat {
         Object playerConfigManager = api.getClass().getMethod("getPlayerConfigManager").invoke(api);
         Object option = invokeByNameAndArgCount(playerConfigManager, "getOptionForId", 1, ENDER_PEARL_BARRIER_OPTION_ID);
         if (option == null) {
-            return true;
+            return false;
         }
         return checkPlayerGroupExceptionOption(protection, option, claimConfig, player);
     }

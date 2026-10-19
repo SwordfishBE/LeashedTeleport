@@ -1,6 +1,9 @@
 package net.leashedteleport.handler;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.leashedteleport.LeashedTeleportMod;
 import net.leashedteleport.compat.OpenPartiesAndClaimsCompat;
 import net.leashedteleport.config.LeashedTeleportConfig;
@@ -11,16 +14,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.TamableAnimal;
-import net.minecraft.world.level.border.WorldBorder;
-import net.minecraft.world.level.portal.TeleportTransition;
-import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,55 +29,45 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class LeashTeleportHandler {
+    private record PendingTeleport(ServerLevel originLevel, List<Mob> mobs,
+                                   OpenPartiesAndClaimsCompat.TeleportType teleportType) {}
 
-    private record PendingTeleport(
-            ServerLevel originLevel,
-            List<Mob> mobs,
-            OpenPartiesAndClaimsCompat.TeleportType teleportType
-    ) {}
-
-    /**
-     * Pending leash re-attachments: mob UUID -> player UUID.
-     * When ENTITY_LOAD fires for a mob whose UUID is in this map,
-     * we immediately re-attach the leash to the correct player.
-     */
     private static final Map<UUID, UUID> PENDING_LEASH = new ConcurrentHashMap<>();
     private static final Map<UUID, PendingTeleport> PENDING_TELEPORTS = new ConcurrentHashMap<>();
 
-    /** Register the ENTITY_LOAD listener once at startup. */
     public static void registerEvents() {
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> clearPlayer(handler.player.getUUID()));
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> clearAllPending());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> clearAllPending());
+        // All captures complete synchronously. Anything left at tick end was interrupted.
+        ServerTickEvents.END_SERVER_TICK.register(server -> clearAllPending());
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (!(entity instanceof Mob mob)) return;
             UUID playerUUID = PENDING_LEASH.remove(mob.getUUID());
             if (playerUUID == null) return;
-
             ServerPlayer player = level.getServer().getPlayerList().getPlayer(playerUUID);
-            if (player == null || player.isRemoved()) {
-                LeashedTeleportMod.LOGGER.warn(
-                    "[{}] Player {} not found when re-attaching leash to {}.",
-                    LeashedTeleportMod.MOD_NAME,
-                    playerUUID, mob.getUUID());
-                return;
-            }
-
-            LeashedTeleportConfig config = LeashedTeleportConfig.get();
+            if (player == null || player.isRemoved() || player.level() != level) return;
             mob.setLeashedTo(player, true);
-            applyProtection(mob, config.getDamageResistanceDuration());
-            LeashedTeleportMod.LOGGER.debug(
-                "[{}] Leash re-attached to {} via ENTITY_LOAD event.", LeashedTeleportMod.MOD_NAME, mob.getUUID());
+            applyProtection(mob, LeashedTeleportConfig.get().getDamageResistanceDuration());
         });
+    }
+
+    public static void clearPlayer(UUID playerUuid) {
+        PENDING_TELEPORTS.remove(playerUuid);
+        PENDING_LEASH.entrySet().removeIf(entry -> entry.getValue().equals(playerUuid));
+    }
+
+    public static void clearAllPending() {
+        PENDING_TELEPORTS.clear();
+        PENDING_LEASH.clear();
     }
 
     public static List<Mob> collectEligibleMobs(ServerPlayer player) {
         LeashedTeleportConfig config = LeashedTeleportConfig.get();
         double radius = config.getLeashRadius();
-        double radiusSqr = radius * radius;
-        ServerLevel level = (ServerLevel) player.level();
-
-        AABB searchBox = player.getBoundingBox().inflate(radius);
         List<Mob> eligible = new ArrayList<>();
-        for (Mob mob : level.getEntitiesOfClass(Mob.class, searchBox)) {
-            if (mob.distanceToSqr(player) <= radiusSqr && isEligible(mob, player, config)) {
+        for (Mob mob : player.level().getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(radius))) {
+            if (mob.distanceToSqr(player) <= radius * radius && isEligible(mob, player, config)) {
                 eligible.add(mob);
             }
         }
@@ -89,240 +78,118 @@ public class LeashTeleportHandler {
         capturePendingTeleport(player, OpenPartiesAndClaimsCompat.TeleportType.GENERAL);
     }
 
-    public static void capturePendingTeleport(
-            ServerPlayer player,
-            OpenPartiesAndClaimsCompat.TeleportType teleportType
-    ) {
-        if (PENDING_TELEPORTS.containsKey(player.getUUID())) {
-            return;
-        }
-
-        List<Mob> mobs = collectEligibleMobs(player);
-        if (mobs.isEmpty()) {
-            PENDING_TELEPORTS.remove(player.getUUID());
-            return;
-        }
-
-        PENDING_TELEPORTS.put(player.getUUID(), new PendingTeleport((ServerLevel) player.level(), mobs, teleportType));
+    public static void capturePendingTeleport(ServerPlayer player, OpenPartiesAndClaimsCompat.TeleportType type) {
+        if (PENDING_TELEPORTS.containsKey(player.getUUID())) return;
+        // Keep the cause even for an empty/denied capture; generic hooks must not override it.
+        PENDING_TELEPORTS.put(player.getUUID(), new PendingTeleport(player.level(), collectEligibleMobs(player), type));
     }
 
     public static void clearPendingTeleport(ServerPlayer player) {
         PENDING_TELEPORTS.remove(player.getUUID());
     }
 
-    public static void handlePendingTeleport(ServerPlayer player, ServerLevel targetLevel,
-                                             double x, double y, double z) {
-        PendingTeleport pendingTeleport = PENDING_TELEPORTS.remove(player.getUUID());
-        if (pendingTeleport == null || pendingTeleport.mobs().isEmpty()) {
-            return;
-        }
-
-        teleportMobs(
-                player,
-                pendingTeleport.originLevel(),
-                targetLevel,
-                x,
-                y,
-                z,
-                pendingTeleport.mobs(),
-                pendingTeleport.teleportType()
-        );
-    }
-
-    public static void schedulePendingTeleport(ServerPlayer player, ServerLevel targetLevel,
-                                               double x, double y, double z) {
-        MinecraftServer server = targetLevel.getServer();
-        if (server == null) {
-            handlePendingTeleport(player, targetLevel, x, y, z);
-            return;
-        }
-
-        UUID playerUuid = player.getUUID();
-        server.execute(() -> {
-            ServerPlayer currentPlayer = server.getPlayerList().getPlayer(playerUuid);
-            if (currentPlayer == null || currentPlayer.isRemoved()) {
-                PENDING_TELEPORTS.remove(playerUuid);
-                return;
+    public static void handlePendingTeleport(ServerPlayer player) {
+        PendingTeleport pending = PENDING_TELEPORTS.remove(player.getUUID());
+        if (pending == null || player.isRemoved()) return;
+        try {
+            teleportMobs(player, pending);
+        } finally {
+            // A player who crossed dimensions cannot remain the holder of animals left behind.
+            for (Mob mob : pending.mobs()) {
+                if (!mob.isRemoved() && mob.level() != player.level() && mob.getLeashHolder() == player) {
+                    mob.dropLeash();
+                }
             }
-
-            handlePendingTeleport(currentPlayer, targetLevel, x, y, z);
-        });
+        }
     }
 
     private static boolean isEligible(Mob mob, ServerPlayer player, LeashedTeleportConfig config) {
-        Entity holder = mob.getLeashHolder();
-        if (!(holder instanceof ServerPlayer leashedTo)) return false;
-        if (!leashedTo.getUUID().equals(player.getUUID())) return false;
-
-        var entityTypeKey = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType());
-        if (entityTypeKey != null && config.getBlacklist().contains(entityTypeKey.toString())) return false;
-
+        if (mob.isRemoved() || mob.getLeashHolder() != player) return false;
+        var typeKey = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType());
+        if (typeKey != null && config.getBlacklist().contains(typeKey.toString())) return false;
         if (mob instanceof TamableAnimal tamable && tamable.isTame()) {
             Entity owner = tamable.getOwner();
-            // Block if owner is a different player, OR if the owner is offline (null) —
-            // we cannot verify ownership when the owner isn't loaded, so we refuse.
             if (owner == null || !owner.getUUID().equals(player.getUUID())) return false;
         }
-
         return true;
     }
 
-    public static void teleportMobs(ServerPlayer player, ServerLevel originLevel, ServerLevel targetLevel,
-                                    double x, double y, double z, List<Mob> mobs) {
-        teleportMobs(
-                player,
-                originLevel,
-                targetLevel,
-                x,
-                y,
-                z,
-                mobs,
-                OpenPartiesAndClaimsCompat.TeleportType.GENERAL
-        );
+    private static boolean canFollow(ServerPlayer player, OpenPartiesAndClaimsCompat.TeleportType type,
+                                     LeashedTeleportConfig config) {
+        if (!PermissionManager.canUse(player)) return false;
+        return switch (type) {
+            case GENERAL -> true;
+            case ENDER_PEARL -> config.isEnderPearlTeleport() && PermissionManager.canEnderPearlTeleport(player);
+            case CHORUS_FRUIT -> config.isChorusFruitTeleport() && PermissionManager.canChorusFruitTeleport(player);
+        };
     }
 
-    public static void teleportMobs(
-            ServerPlayer player,
-            ServerLevel originLevel,
-            ServerLevel targetLevel,
-            double x,
-            double y,
-            double z,
-            List<Mob> mobs,
-            OpenPartiesAndClaimsCompat.TeleportType teleportType
-    ) {
-        if (mobs.isEmpty()) return;
-
+    private static void teleportMobs(ServerPlayer player, PendingTeleport pending) {
         LeashedTeleportConfig config = LeashedTeleportConfig.get();
-        if (!PermissionManager.canUse(player)) {
-            LeashedTeleportMod.LOGGER.debug(
-                    "[{}] Player {} lacks permission {}.",
-                    LeashedTeleportMod.MOD_NAME,
-                    player.getName().getString(),
-                    PermissionManager.USE_PERMISSION);
-            return;
-        }
+        if (!canFollow(player, pending.teleportType(), config)) return;
+        ServerLevel targetLevel = player.level();
+        boolean crossDim = pending.originLevel() != targetLevel;
+        if (crossDim && (!config.isCrossDimensionTeleport() || !PermissionManager.canCrossDimensionTeleport(player))) return;
 
-        WorldBorder border = targetLevel.getWorldBorder();
-        if (!border.isWithinBounds(BlockPos.containing(x, y, z))) {
-            LeashedTeleportMod.LOGGER.debug("[{}] Destination outside world border. Skipping.", LeashedTeleportMod.MOD_NAME);
-            return;
-        }
-
-        // Safety check: find a safe location for the mobs
-        BlockPos safePos = TeleportSafetyChecker.findSafeLocation(targetLevel, x, y, z);
-        if (safePos == null) {
-            LeashedTeleportMod.LOGGER.warn(
-                "[{}] No safe location found near destination ({}, {}, {}). Teleport cancelled for {} mob(s).",
-                LeashedTeleportMod.MOD_NAME,
-                x, y, z, mobs.size());
-            player.sendSystemMessage(Component.literal(
-                "[LeashedTeleport] Not enough space at destination – your leashed mob stayed behind."));
-            return;
-        }
-
-        // Use the safe position instead of the original coordinates
-        double safeX = safePos.getX() + 0.5;
-        double safeY = safePos.getY();
-        double safeZ = safePos.getZ() + 0.5;
-
-        boolean crossDim = originLevel != targetLevel;
-        if (crossDim && !PermissionManager.canCrossDimensionTeleport(player)) {
-            LeashedTeleportMod.LOGGER.debug(
-                    "[{}] Player {} lacks permission {}.",
-                    LeashedTeleportMod.MOD_NAME,
-                    player.getName().getString(),
-                    PermissionManager.CROSS_DIMENSION_TELEPORT_PERMISSION);
-            return;
-        }
-
-        if (crossDim && !config.isCrossDimensionTeleport()) {
-            // Cross-dim disabled: silently drop the leash so the mob stays behind cleanly.
-            // The player crosses dimensions; if they return, vanilla leash distance rules apply.
-            for (Mob mob : mobs) {
-                if (!mob.isRemoved()) {
-                    ((LeashableEntityAccessor) mob).leashedteleport_setLeashData(null);
-                }
+        boolean unsafe = false;
+        boolean claimBlocked = false;
+        for (Mob mob : pending.mobs()) {
+            if (mob.level() != pending.originLevel() || !isEligible(mob, player, config)) continue;
+            BlockPos safePos = TeleportSafetyChecker.findSafeLocation(targetLevel, mob,
+                    player.getX(), player.getY(), player.getZ());
+            if (safePos == null) {
+                unsafe = true;
+                continue;
             }
-            LeashedTeleportMod.LOGGER.debug("[{}] Cross-dimension teleport disabled. Leash released.", LeashedTeleportMod.MOD_NAME);
-            return;
-        }
-
-        if (!canTeleportIntoClaim(player, targetLevel, safePos, teleportType)) {
-            LeashedTeleportMod.LOGGER.debug(
-                    "[{}] Open Parties and Claims blocked leashed mob teleport for player {} to {}.",
-                    LeashedTeleportMod.MOD_NAME,
-                    player.getName().getString(),
-                    safePos
-            );
-            player.sendSystemMessage(Component.literal(opacBlockedMessage(teleportType)));
-            return;
-        }
-
-        int count = 0;
-        for (Mob mob : mobs) {
-            if (mob.isRemoved()) continue;
-
+            if (config.isRespectOpenPartiesAndClaims()
+                    && !OpenPartiesAndClaimsCompat.canTeleportInto(targetLevel, safePos, player, pending.teleportType())) {
+                claimBlocked = true;
+                continue;
+            }
             if (crossDim) {
-                final UUID mobUUID = mob.getUUID();
-                // Register pending leash before teleport so ENTITY_LOAD catches it
-                PENDING_LEASH.put(mobUUID, player.getUUID());
-                // Clear leashData to avoid corrupt "no attachment" crash on save
-                ((LeashableEntityAccessor) mob).leashedteleport_setLeashData(null);
-                applyProtection(mob, config.getDamageResistanceDuration());
-                // Teleport mob to target level — ENTITY_LOAD event handles leash re-attach when mob arrives
-                boolean teleported = mob.teleportTo(targetLevel, safeX, safeY, safeZ, Set.of(), mob.getYRot(), mob.getXRot(), false);
-                if (!teleported) {
-                    PENDING_LEASH.remove(mobUUID);
-                    if (!player.isRemoved() && !mob.isRemoved()) {
-                        mob.setLeashedTo(player, true);
-                    }
-                    LeashedTeleportMod.LOGGER.warn(
-                        "[{}] Failed to teleport leashed mob {} to destination level. Restored leash to player {}.",
-                        LeashedTeleportMod.MOD_NAME,
-                        mobUUID,
-                        player.getUUID());
-                    continue;
-                }
+                teleportAcrossDimensions(mob, player, targetLevel, safePos, config);
             } else {
-                mob.snapTo(safeX, safeY, safeZ, mob.getYRot(), mob.getXRot());
-                if (mob.getLeashHolder() != player) {
-                    mob.setLeashedTo(player, true);
-                }
+                mob.snapTo(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5, mob.getYRot(), mob.getXRot());
                 applyProtection(mob, config.getDamageResistanceDuration());
             }
-            count++;
         }
+        if (unsafe) player.sendSystemMessage(Component.literal(
+                "[LeashedTeleport] Not enough safe space at destination; some leashed mobs stayed behind."));
+        if (claimBlocked) player.sendSystemMessage(Component.literal(
+                "[LeashedTeleport] Open Parties and Claims blocked your leashed mobs from entering this claim."));
+    }
 
-        if (count > 0) {
-            LeashedTeleportMod.LOGGER.debug("[{}] Teleported {} leashed mob(s) with player {} to safe location {}.",
-                LeashedTeleportMod.MOD_NAME, count, player.getName().getString(), safePos);
+    private static void teleportAcrossDimensions(Mob mob, ServerPlayer player, ServerLevel target,
+                                                 BlockPos pos, LeashedTeleportConfig config) {
+        UUID mobId = mob.getUUID();
+        var originalLeash = mob.getLeashData();
+        boolean teleported = false;
+        PENDING_LEASH.put(mobId, player.getUUID());
+        try {
+            mob.removeLeash();
+            applyProtection(mob, config.getDamageResistanceDuration());
+            teleported = mob.teleportTo(target, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5,
+                    Set.of(), mob.getYRot(), mob.getXRot(), false);
+            if (!teleported) {
+                LeashedTeleportMod.LOGGER.warn("[{}] Failed to teleport leashed mob {}.",
+                        LeashedTeleportMod.MOD_NAME, mobId);
+            }
+        } finally {
+            PENDING_LEASH.remove(mobId);
+            if (!teleported && !mob.isRemoved()) {
+                // Restore the data only to let vanilla detach/drop correctly on failure.
+                ((LeashableEntityAccessor) mob).leashedteleport_setLeashData(originalLeash);
+                if (!player.isRemoved() && mob.level() == player.level()) {
+                    mob.setLeashedTo(player, true);
+                } else {
+                    mob.dropLeash();
+                }
+            }
         }
     }
 
     private static void applyProtection(Mob mob, int durationTicks) {
         mob.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, durationTicks, 4, false, false));
         mob.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, durationTicks, 0, false, false));
-    }
-
-    private static boolean canTeleportIntoClaim(
-            ServerPlayer player,
-            ServerLevel level,
-            BlockPos pos,
-            OpenPartiesAndClaimsCompat.TeleportType teleportType
-    ) {
-        LeashedTeleportConfig config = LeashedTeleportConfig.get();
-        if (!config.isRespectOpenPartiesAndClaims()) {
-            return true;
-        }
-        return OpenPartiesAndClaimsCompat.canTeleportInto(level, pos, player, teleportType);
-    }
-
-    private static String opacBlockedMessage(OpenPartiesAndClaimsCompat.TeleportType teleportType) {
-        return switch (teleportType) {
-            case ENDER_PEARL -> "[LeashedTeleport] Open Parties and Claims blocks leashed ender pearl entry into this claim.";
-            case CHORUS_FRUIT -> "[LeashedTeleport] Open Parties and Claims blocks leashed chorus fruit entry into this claim.";
-            case GENERAL -> "[LeashedTeleport] Open Parties and Claims blocks your leashed mob from entering this claim.";
-        };
     }
 }

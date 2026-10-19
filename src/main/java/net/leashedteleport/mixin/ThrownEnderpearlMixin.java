@@ -1,9 +1,7 @@
 package net.leashedteleport.mixin;
 
-import net.leashedteleport.config.LeashedTeleportConfig;
 import net.leashedteleport.compat.OpenPartiesAndClaimsCompat;
 import net.leashedteleport.handler.LeashTeleportHandler;
-import net.leashedteleport.permission.PermissionManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
@@ -25,16 +23,8 @@ public class ThrownEnderpearlMixin {
             )
     )
     private void leashedteleport$captureEnderPearlTeleport(HitResult result, CallbackInfo ci) {
-        if (!LeashedTeleportConfig.get().isEnderPearlTeleport()) {
-            return;
-        }
-
         Entity owner = ((ThrownEnderpearl) (Object) this).getOwner();
         if (!(owner instanceof ServerPlayer player)) {
-            return;
-        }
-
-        if (!PermissionManager.canEnderPearlTeleport(player)) {
             return;
         }
 

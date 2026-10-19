@@ -71,7 +71,7 @@ public final class ModrinthUpdateChecker {
                 LeashedTeleportMod.LOGGER.info("[{}] New version available: {} (current: {})",
                         LeashedTeleportMod.MOD_NAME, newestVersion, currentVersion);
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException | InterruptedException | RuntimeException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
@@ -79,7 +79,7 @@ public final class ModrinthUpdateChecker {
         }
     }
 
-    private static Optional<String> extractLatestVersion(String responseBody, String minecraftVersion) {
+    static Optional<String> extractLatestVersion(String responseBody, String minecraftVersion) {
         JsonElement root = JsonParser.parseString(responseBody);
         if (!root.isJsonArray()) {
             return Optional.empty();
@@ -87,7 +87,6 @@ public final class ModrinthUpdateChecker {
 
         JsonArray versions = root.getAsJsonArray();
         VersionCandidate newestCompatible = null;
-        VersionCandidate newestRelease = null;
 
         for (JsonElement versionElement : versions) {
             if (!versionElement.isJsonObject()) {
@@ -111,10 +110,6 @@ public final class ModrinthUpdateChecker {
             }
 
             VersionCandidate candidate = new VersionCandidate(versionNumber, publishedAt);
-            if (newestRelease == null || publishedAt.isAfter(newestRelease.publishedAt())) {
-                newestRelease = candidate;
-            }
-
             if (jsonArrayContains(versionObject, "loaders", "fabric")
                     && jsonArrayContains(versionObject, "game_versions", minecraftVersion)
                     && (newestCompatible == null || publishedAt.isAfter(newestCompatible.publishedAt()))) {
@@ -122,13 +117,13 @@ public final class ModrinthUpdateChecker {
             }
         }
 
-        VersionCandidate selected = newestCompatible != null ? newestCompatible : newestRelease;
+        VersionCandidate selected = newestCompatible;
         return selected != null ? Optional.of(selected.versionNumber()) : Optional.empty();
     }
 
     private static String getString(JsonObject object, String key) {
         JsonElement value = object.get(key);
-        if (value == null || value.isJsonNull()) {
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
             return null;
         }
 

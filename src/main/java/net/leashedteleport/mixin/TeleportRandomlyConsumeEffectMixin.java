@@ -1,9 +1,7 @@
 package net.leashedteleport.mixin;
 
-import net.leashedteleport.config.LeashedTeleportConfig;
 import net.leashedteleport.compat.OpenPartiesAndClaimsCompat;
 import net.leashedteleport.handler.LeashTeleportHandler;
-import net.leashedteleport.permission.PermissionManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
@@ -36,14 +34,6 @@ public class TeleportRandomlyConsumeEffectMixin {
             return;
         }
 
-        if (!LeashedTeleportConfig.get().isChorusFruitTeleport()) {
-            return;
-        }
-
-        if (!PermissionManager.canChorusFruitTeleport(player)) {
-            return;
-        }
-
         LeashTeleportHandler.capturePendingTeleport(player, OpenPartiesAndClaimsCompat.TeleportType.CHORUS_FRUIT);
     }
 
@@ -65,19 +55,11 @@ public class TeleportRandomlyConsumeEffectMixin {
             return;
         }
 
-        if (!LeashedTeleportConfig.get().isChorusFruitTeleport()) {
-            return;
-        }
-
-        if (!PermissionManager.canChorusFruitTeleport(player)) {
-            return;
-        }
-
         if (!cir.getReturnValue()) {
             LeashTeleportHandler.clearPendingTeleport(player);
             return;
         }
 
-        LeashTeleportHandler.schedulePendingTeleport(player, serverLevel, player.getX(), player.getY(), player.getZ());
+        LeashTeleportHandler.handlePendingTeleport(player);
     }
 }
