@@ -5,6 +5,8 @@
   "mixins": [
     "ServerPlayerTeleportMixin",
     "LeashableEntityAccessor",
+    "ServerLevelEntityManagerAccessor",
+    "PersistentEntitySectionManagerAccessor",
     "ThrownEnderpearlMixin",
     "TeleportRandomlyConsumeEffectMixin"
   ],

@@ -3,6 +3,7 @@ package net.leashedteleport.handler;
 import net.leashedteleport.compat.OpenPartiesAndClaimsCompat.TeleportType;
 import net.leashedteleport.config.LeashedTeleportConfig;
 import net.leashedteleport.safety.TeleportSafetyChecker;
+import net.leashedteleport.util.LoadedMobLookup;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -59,8 +60,8 @@ public final class PendingLeashTeleports {
                     || player.level().dimension() != request.target()
                     || player.position().distanceToSqr(request.targetPos()) > 4
                     || server.getTickCount() >= request.deadline()
-                    || mob == null || mob.isRemoved() || !mob.isAlive() || mob.getLeashHolder() != null
-                    || mob.position().distanceToSqr(request.sourcePos()) > 1) {
+                    || (mob != null && (mob.isRemoved() || !mob.isAlive() || mob.getLeashHolder() != null
+                    || mob.position().distanceToSqr(request.sourcePos()) > 1))) {
                 cancel(server, entry.getKey(), request);
             }
         }
@@ -97,13 +98,14 @@ public final class PendingLeashTeleports {
 
     private static Mob resolve(MinecraftServer server, UUID id, Request request) {
         ServerLevel source = server.getLevel(request.source());
-        return source != null && source.getEntity(id) instanceof Mob mob ? mob : null;
+        return LoadedMobLookup.find(source, id, request.sourcePos());
     }
 
     private static void cancel(MinecraftServer server, UUID id, Request request) {
         pending.remove(id);
         Mob mob = resolve(server, id, request);
-        if (mob != null) release(mob, server.getPlayerList().getPlayer(request.player()), true);
+        if (mob != null && !mob.isRemoved()) release(mob, server.getPlayerList().getPlayer(request.player()), true);
+        else leadDrops.add(new LeadDrop(request.source(), request.sourcePos()));
     }
 
     private static void release(Mob mob, ServerPlayer player, boolean cancelled) {
@@ -130,16 +132,20 @@ public final class PendingLeashTeleports {
             Mob mob = resolve(server, mobId, request);
             if (player == null || player.isRemoved() || !player.isAlive()
                     || player.level().dimension() != request.target()
-                    || player.position().distanceToSqr(request.targetPos()) > 4
-                    || mob == null || mob.isRemoved() || !mob.isAlive() || mob.getLeashHolder() != null
-                    || mob.position().distanceToSqr(request.sourcePos()) > 1) {
+                    || player.position().distanceToSqr(request.targetPos()) > 4) {
                 cancel(server, mobId, request);
                 continue;
             }
             if (server.getTickCount() >= request.deadline()) {
                 cancel(server, mobId, request);
                 player.sendSystemMessage(Component.literal(
-                        "[LeashedTeleport] Destination terrain did not finish loading; your leashed mob stayed behind."));
+                        "[LeashedTeleport] Transfer timed out while waiting for terrain or your leashed mob to become available."));
+                continue;
+            }
+            if (mob == null) continue;
+            if (mob.isRemoved() || !mob.isAlive() || mob.getLeashHolder() != null
+                    || mob.position().distanceToSqr(request.sourcePos()) > 1) {
+                cancel(server, mobId, request);
                 continue;
             }
             boolean chunksReady = TeleportSafetyChecker.areSearchChunksLoaded(player.level(), mob, request.targetPos());

@@ -179,6 +179,19 @@ class LeashTeleportHandlerTest {
         assertTrue(pendingLeashes().isEmpty());
     }
 
+    @Test void successfulDimensionTransferReattachesWithoutEntityLoadEvent() throws Exception {
+        LeashTeleportHandler.capturePendingTeleport(player);
+        ServerLevel target = mock(ServerLevel.class);
+        Mob transferred = mock(Mob.class);
+        when(player.level()).thenReturn(target);
+        when(target.getEntity(mob.getUUID())).thenReturn(transferred);
+        when(mob.teleportTo(any(), anyDouble(), anyDouble(), anyDouble(), anySet(), anyFloat(), anyFloat(), anyBoolean()))
+                .thenReturn(true);
+        LeashTeleportHandler.handlePendingTeleport(player);
+        verify(transferred).setLeashedTo(player, true);
+        assertTrue(pendingLeashes().isEmpty());
+    }
+
     private void prepareColdDestination() {
         deferredServer = mock(MinecraftServer.class);
         PlayerList players = mock(PlayerList.class);
@@ -283,6 +296,55 @@ class LeashTeleportHandlerTest {
         PendingLeashTeleports.tick(deferredServer);
         verify(mob, never()).snapTo(anyDouble(), anyDouble(), anyDouble(), anyFloat(), anyFloat());
         verify(mob, times(1)).spawnAtLocation(eq(origin), eq(Items.LEAD));
+    }
+
+    @Test void missingMobLookupWaitsAndSurvivesRapidRetarget() throws Exception {
+        prepareColdDestination();
+        when(origin.getEntity(mob.getUUID())).thenReturn(null);
+        PendingLeashTeleports.tick(deferredServer);
+        assertEquals(1, pendingTransfers().size());
+        LeashTeleportHandler.capturePendingTeleport(player);
+        when(player.position()).thenReturn(new Vec3(2000, 64, 3000));
+        when(player.getX()).thenReturn(2000.0);
+        when(player.getZ()).thenReturn(3000.0);
+        LeashTeleportHandler.handlePendingTeleport(player);
+        assertEquals(1, pendingTransfers().size());
+        verify(mob, never()).spawnAtLocation(eq(origin), eq(Items.LEAD));
+        when(origin.getEntity(mob.getUUID())).thenReturn(mob);
+        when(deferredServer.getTickCount()).thenReturn(5);
+        safety.when(() -> TeleportSafetyChecker.findSafeLocation(any(), any(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(new Vec3(2000, 64, 3000));
+        PendingLeashTeleports.tick(deferredServer);
+        assertTrue(pendingTransfers().isEmpty());
+        verify(mob).snapTo(2000, 64, 3000, 0, 0);
+        verify(mob).setLeashedTo(player, true);
+    }
+
+    @Test void missingMobTimeoutRefundsOnceWithoutExtendingDeadline() throws Exception {
+        prepareColdDestination();
+        when(origin.getEntity(mob.getUUID())).thenReturn(null);
+        when(deferredServer.getTickCount()).thenReturn(99);
+        LeashTeleportHandler.capturePendingTeleport(player);
+        when(player.position()).thenReturn(new Vec3(2000, 64, 3000));
+        LeashTeleportHandler.handlePendingTeleport(player);
+        PendingLeashTeleports.tick(deferredServer);
+        assertEquals(1, pendingTransfers().size());
+        try (var stacks = mockConstruction(net.minecraft.world.item.ItemStack.class);
+             var items = mockConstruction(net.minecraft.world.entity.item.ItemEntity.class)) {
+            when(deferredServer.getTickCount()).thenReturn(100);
+            PendingLeashTeleports.tick(deferredServer);
+            PendingLeashTeleports.tick(deferredServer);
+            assertTrue(pendingTransfers().isEmpty());
+            assertEquals(1, items.constructed().size());
+            verify(origin).addFreshEntity(items.constructed().getFirst());
+            verify(player, times(1)).sendSystemMessage(any());
+        }
+    }
+
+    private static Map<?, ?> pendingTransfers() throws Exception {
+        var field = PendingLeashTeleports.class.getDeclaredField("pending");
+        field.setAccessible(true);
+        return (Map<?, ?>) field.get(null);
     }
 
     @Test void sameTickTeleportFindsMobBeforeSpatialIndexCatchesUp() {

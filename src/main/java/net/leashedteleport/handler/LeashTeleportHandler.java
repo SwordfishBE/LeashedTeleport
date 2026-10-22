@@ -10,6 +10,7 @@ import net.leashedteleport.config.LeashedTeleportConfig;
 import net.leashedteleport.mixin.LeashableEntityAccessor;
 import net.leashedteleport.permission.PermissionManager;
 import net.leashedteleport.safety.TeleportSafetyChecker;
+import net.leashedteleport.util.LoadedMobLookup;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -36,7 +37,7 @@ public class LeashTeleportHandler {
     private static final Map<UUID, UUID> PENDING_LEASH = new ConcurrentHashMap<>();
     private static final Map<UUID, PendingTeleport> PENDING_TELEPORTS = new ConcurrentHashMap<>();
     // Positions change before the entity-section index catches up within the same tick.
-    private static final Map<UUID, Set<UUID>> RECENT_MOBS = new java.util.HashMap<>();
+    private static final Map<UUID, Map<UUID, Vec3>> RECENT_MOBS = new java.util.HashMap<>();
 
     public static void registerEvents() {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
@@ -54,7 +55,8 @@ public class LeashTeleportHandler {
             PendingLeashTeleports.tick(server);
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
-            if (entity instanceof Mob mob) PendingLeashTeleports.cancelMob(mob);
+            // Losing tracking visibility is not an entity removal.
+            if (entity instanceof Mob mob && mob.isRemoved()) PendingLeashTeleports.cancelMob(mob);
         });
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (!(entity instanceof Mob mob)) return;
@@ -85,8 +87,9 @@ public class LeashTeleportHandler {
         List<Mob> eligible = new ArrayList<>();
         Set<Mob> candidates = new java.util.LinkedHashSet<>(
                 player.level().getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(radius)));
-        for (UUID id : RECENT_MOBS.getOrDefault(player.getUUID(), Set.of())) {
-            if (player.level().getEntity(id) instanceof Mob mob) candidates.add(mob);
+        for (var entry : RECENT_MOBS.getOrDefault(player.getUUID(), Map.of()).entrySet()) {
+            Mob mob = LoadedMobLookup.find(player.level(), entry.getKey(), entry.getValue());
+            if (mob != null) candidates.add(mob);
         }
         for (Mob mob : candidates) {
             if (mob.distanceToSqr(player) <= radius * radius && isEligible(mob, player, config)) {
@@ -193,7 +196,7 @@ public class LeashTeleportHandler {
                 if (mob.getLeashHolder() != player) mob.setLeashedTo(player, true);
                 applyProtection(mob, config.getDamageResistanceDuration());
             }
-            RECENT_MOBS.computeIfAbsent(player.getUUID(), id -> new java.util.HashSet<>()).add(mob.getUUID());
+            RECENT_MOBS.computeIfAbsent(player.getUUID(), id -> new java.util.HashMap<>()).put(mob.getUUID(), safePos);
         }
         if (unsafe) player.sendSystemMessage(Component.literal(
                 "[LeashedTeleport] Not enough safe space at destination; some leashed mobs stayed behind."));
@@ -212,6 +215,15 @@ public class LeashTeleportHandler {
             applyProtection(mob, config.getDamageResistanceDuration());
             teleported = mob.teleportTo(target, pos.x, pos.y, pos.z,
                     Set.of(), mob.getYRot(), mob.getXRot(), false);
+            if (teleported) {
+                // ENTITY_LOAD is not guaranteed until a hidden destination becomes tracked.
+                Mob transferred = LoadedMobLookup.find(target, mobId, pos);
+                if (transferred != null && !transferred.isRemoved() && transferred.getLeashHolder() == null
+                        && !player.isRemoved() && player.level() == target) {
+                    transferred.setLeashedTo(player, true);
+                    applyProtection(transferred, config.getDamageResistanceDuration());
+                }
+            }
             if (!teleported) {
                 LeashedTeleportMod.LOGGER.warn("[{}] Failed to teleport leashed mob {}.",
                         LeashedTeleportMod.MOD_NAME, mobId);
