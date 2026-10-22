@@ -48,6 +48,35 @@ public final class PendingLeashTeleports {
         }
     }
 
+    public static void prepareTeleport(ServerPlayer player, TeleportType type) {
+        MinecraftServer server = player.level().getServer();
+        for (var entry : List.copyOf(pending.entrySet())) {
+            Request request = entry.getValue();
+            if (!request.player().equals(player.getUUID())) continue;
+            Mob mob = resolve(server, entry.getKey(), request);
+            if (type != TeleportType.GENERAL || request.type() != TeleportType.GENERAL
+                    || player.isRemoved() || !player.isAlive() || player.isShiftKeyDown()
+                    || player.level().dimension() != request.target()
+                    || player.position().distanceToSqr(request.targetPos()) > 4
+                    || server.getTickCount() >= request.deadline()
+                    || mob == null || mob.isRemoved() || !mob.isAlive() || mob.getLeashHolder() != null
+                    || mob.position().distanceToSqr(request.sourcePos()) > 1) {
+                cancel(server, entry.getKey(), request);
+            }
+        }
+    }
+
+    public static void retargetPlayer(ServerPlayer player) {
+        for (var entry : List.copyOf(pending.entrySet())) {
+            Request request = entry.getValue();
+            if (request.player().equals(player.getUUID())) {
+                pending.put(entry.getKey(), new Request(request.player(), request.source(),
+                        player.level().dimension(), request.sourcePos(), player.position(),
+                        request.type(), request.deadline()));
+            }
+        }
+    }
+
     public static void clear(MinecraftServer server) {
         try {
             for (var entry : List.copyOf(pending.entrySet())) cancel(server, entry.getKey(), entry.getValue());
@@ -113,8 +142,9 @@ public final class PendingLeashTeleports {
                         "[LeashedTeleport] Destination terrain did not finish loading; your leashed mob stayed behind."));
                 continue;
             }
-            if (server.getTickCount() % 5 != 0) continue;
-            if (!TeleportSafetyChecker.areSearchChunksLoaded(player.level(), mob, request.targetPos())
+            boolean chunksReady = TeleportSafetyChecker.areSearchChunksLoaded(player.level(), mob, request.targetPos());
+            if (!chunksReady && server.getTickCount() % 5 != 0) continue;
+            if (!chunksReady
                     && TeleportSafetyChecker.findSafeLocation(player.level(), mob,
                     player.getX(), player.getY(), player.getZ()) == null) continue;
             pending.remove(mobId);

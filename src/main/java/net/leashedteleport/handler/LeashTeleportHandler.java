@@ -35,6 +35,8 @@ public class LeashTeleportHandler {
 
     private static final Map<UUID, UUID> PENDING_LEASH = new ConcurrentHashMap<>();
     private static final Map<UUID, PendingTeleport> PENDING_TELEPORTS = new ConcurrentHashMap<>();
+    // Positions change before the entity-section index catches up within the same tick.
+    private static final Map<UUID, Set<UUID>> RECENT_MOBS = new java.util.HashMap<>();
 
     public static void registerEvents() {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
@@ -66,11 +68,13 @@ public class LeashTeleportHandler {
     }
 
     public static void clearPlayer(UUID playerUuid) {
+        RECENT_MOBS.remove(playerUuid);
         PENDING_TELEPORTS.remove(playerUuid);
         PENDING_LEASH.entrySet().removeIf(entry -> entry.getValue().equals(playerUuid));
     }
 
     public static void clearAllPending() {
+        RECENT_MOBS.clear();
         PENDING_TELEPORTS.clear();
         PENDING_LEASH.clear();
     }
@@ -79,7 +83,12 @@ public class LeashTeleportHandler {
         LeashedTeleportConfig config = LeashedTeleportConfig.get();
         double radius = config.getLeashRadius();
         List<Mob> eligible = new ArrayList<>();
-        for (Mob mob : player.level().getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(radius))) {
+        Set<Mob> candidates = new java.util.LinkedHashSet<>(
+                player.level().getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(radius)));
+        for (UUID id : RECENT_MOBS.getOrDefault(player.getUUID(), Set.of())) {
+            if (player.level().getEntity(id) instanceof Mob mob) candidates.add(mob);
+        }
+        for (Mob mob : candidates) {
             if (mob.distanceToSqr(player) <= radius * radius && isEligible(mob, player, config)) {
                 eligible.add(mob);
             }
@@ -93,7 +102,7 @@ public class LeashTeleportHandler {
 
     public static void capturePendingTeleport(ServerPlayer player, OpenPartiesAndClaimsCompat.TeleportType type) {
         if (PENDING_TELEPORTS.containsKey(player.getUUID())) return;
-        PendingLeashTeleports.cancelPlayer(player.level().getServer(), player.getUUID());
+        PendingLeashTeleports.prepareTeleport(player, type);
         // Keep the cause even for an empty/denied capture; generic hooks must not override it.
         PENDING_TELEPORTS.put(player.getUUID(), new PendingTeleport(player.level(), collectEligibleMobs(player), type));
     }
@@ -105,6 +114,7 @@ public class LeashTeleportHandler {
     public static void handlePendingTeleport(ServerPlayer player) {
         PendingTeleport pending = PENDING_TELEPORTS.remove(player.getUUID());
         if (pending == null || player.isRemoved()) return;
+        PendingLeashTeleports.retargetPlayer(player);
         try {
             teleportMobs(player, pending);
         } finally {
@@ -183,6 +193,7 @@ public class LeashTeleportHandler {
                 if (mob.getLeashHolder() != player) mob.setLeashedTo(player, true);
                 applyProtection(mob, config.getDamageResistanceDuration());
             }
+            RECENT_MOBS.computeIfAbsent(player.getUUID(), id -> new java.util.HashSet<>()).add(mob.getUUID());
         }
         if (unsafe) player.sendSystemMessage(Component.literal(
                 "[LeashedTeleport] Not enough safe space at destination; some leashed mobs stayed behind."));

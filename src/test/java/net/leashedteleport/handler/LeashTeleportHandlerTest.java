@@ -242,11 +242,70 @@ class LeashTeleportHandlerTest {
         verify(mob, times(1)).spawnAtLocation(eq(origin), eq(Items.LEAD));
     }
 
-    @Test void secondTeleportCancelsColdDestination() {
+    @Test void rapidTeleportsRetargetColdDestinationWithoutDroppingLead() {
         prepareColdDestination();
         LeashTeleportHandler.capturePendingTeleport(player);
+        when(player.position()).thenReturn(new Vec3(2000, 64, 3000));
+        LeashTeleportHandler.handlePendingTeleport(player);
+        LeashTeleportHandler.capturePendingTeleport(player);
+        when(player.position()).thenReturn(new Vec3(1000, 64, 2000));
+        LeashTeleportHandler.handlePendingTeleport(player);
+        when(deferredServer.getTickCount()).thenReturn(5);
+        safety.when(() -> TeleportSafetyChecker.findSafeLocation(any(), any(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(new Vec3(1000, 64, 2000));
+        PendingLeashTeleports.tick(deferredServer);
+        verify(mob, times(1)).snapTo(1000, 64, 2000, 0, 0);
+        verify(mob, times(1)).setLeashedTo(player, true);
+        verify(mob, never()).spawnAtLocation(eq(origin), eq(Items.LEAD));
+    }
+
+    @Test void retargetDoesNotExtendOriginalDeadline() {
+        prepareColdDestination();
+        when(deferredServer.getTickCount()).thenReturn(99);
+        LeashTeleportHandler.capturePendingTeleport(player);
+        when(player.position()).thenReturn(new Vec3(2000, 64, 3000));
+        LeashTeleportHandler.handlePendingTeleport(player);
+        when(deferredServer.getTickCount()).thenReturn(100);
         PendingLeashTeleports.tick(deferredServer);
         verify(mob, times(1)).spawnAtLocation(eq(origin), eq(Items.LEAD));
+        verify(player).sendSystemMessage(any());
+    }
+
+    @Test void retargetRechecksPermissionBeforeMovingMob() {
+        prepareColdDestination();
+        LeashTeleportHandler.capturePendingTeleport(player);
+        when(player.position()).thenReturn(new Vec3(2000, 64, 3000));
+        LeashTeleportHandler.handlePendingTeleport(player);
+        when(deferredServer.getTickCount()).thenReturn(5);
+        safety.when(() -> TeleportSafetyChecker.findSafeLocation(any(), any(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(new Vec3(2000, 64, 3000));
+        permissions.when(() -> PermissionManager.canUse(player)).thenReturn(false);
+        PendingLeashTeleports.tick(deferredServer);
+        verify(mob, never()).snapTo(anyDouble(), anyDouble(), anyDouble(), anyFloat(), anyFloat());
+        verify(mob, times(1)).spawnAtLocation(eq(origin), eq(Items.LEAD));
+    }
+
+    @Test void sameTickTeleportFindsMobBeforeSpatialIndexCatchesUp() {
+        when(origin.getEntity(mob.getUUID())).thenReturn(mob);
+        LeashTeleportHandler.capturePendingTeleport(player);
+        LeashTeleportHandler.handlePendingTeleport(player);
+        when(origin.getEntitiesOfClass(eq(Mob.class), any())).thenReturn(List.of());
+        LeashTeleportHandler.capturePendingTeleport(player);
+        LeashTeleportHandler.handlePendingTeleport(player);
+        verify(mob, times(2)).snapTo(1000, 64, 2000, 0, 0);
+        LeashTeleportHandler.clearAllPending();
+        assertTrue(LeashTeleportHandler.collectEligibleMobs(player).isEmpty());
+    }
+
+    @Test void sameTickHistoryDoesNotCarryMobWithChangedHolder() {
+        when(origin.getEntity(mob.getUUID())).thenReturn(mob);
+        LeashTeleportHandler.capturePendingTeleport(player);
+        LeashTeleportHandler.handlePendingTeleport(player);
+        when(origin.getEntitiesOfClass(eq(Mob.class), any())).thenReturn(List.of());
+        when(mob.getLeashHolder()).thenReturn(mock(ServerPlayer.class));
+        LeashTeleportHandler.capturePendingTeleport(player);
+        LeashTeleportHandler.handlePendingTeleport(player);
+        verify(mob, times(1)).snapTo(1000, 64, 2000, 0, 0);
     }
 
     @Test void unloadingSourceMobReturnsDetachedLeadEvenIfRemoved() {
