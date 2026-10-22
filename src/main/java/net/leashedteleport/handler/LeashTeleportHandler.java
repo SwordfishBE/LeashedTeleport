@@ -11,6 +11,7 @@ import net.leashedteleport.mixin.LeashableEntityAccessor;
 import net.leashedteleport.permission.PermissionManager;
 import net.leashedteleport.safety.TeleportSafetyChecker;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -36,11 +37,23 @@ public class LeashTeleportHandler {
     private static final Map<UUID, PendingTeleport> PENDING_TELEPORTS = new ConcurrentHashMap<>();
 
     public static void registerEvents() {
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> clearPlayer(handler.player.getUUID()));
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> clearAllPending());
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            PendingLeashTeleports.cancelPlayer(server, handler.player.getUUID());
+            clearPlayer(handler.player.getUUID());
+        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            PendingLeashTeleports.clear(server);
+            clearAllPending();
+        });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> clearAllPending());
         // All captures complete synchronously. Anything left at tick end was interrupted.
-        ServerTickEvents.END_SERVER_TICK.register(server -> clearAllPending());
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            clearAllPending();
+            PendingLeashTeleports.tick(server);
+        });
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
+            if (entity instanceof Mob mob) PendingLeashTeleports.cancelMob(mob);
+        });
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (!(entity instanceof Mob mob)) return;
             UUID playerUUID = PENDING_LEASH.remove(mob.getUUID());
@@ -80,6 +93,7 @@ public class LeashTeleportHandler {
 
     public static void capturePendingTeleport(ServerPlayer player, OpenPartiesAndClaimsCompat.TeleportType type) {
         if (PENDING_TELEPORTS.containsKey(player.getUUID())) return;
+        PendingLeashTeleports.cancelPlayer(player.level().getServer(), player.getUUID());
         // Keep the cause even for an empty/denied capture; generic hooks must not override it.
         PENDING_TELEPORTS.put(player.getUUID(), new PendingTeleport(player.level(), collectEligibleMobs(player), type));
     }
@@ -104,7 +118,11 @@ public class LeashTeleportHandler {
     }
 
     private static boolean isEligible(Mob mob, ServerPlayer player, LeashedTeleportConfig config) {
-        if (mob.isRemoved() || mob.getLeashHolder() != player) return false;
+        return isEligible(mob, player, config, true);
+    }
+
+    private static boolean isEligible(Mob mob, ServerPlayer player, LeashedTeleportConfig config, boolean requireLeash) {
+        if (mob.isRemoved() || (requireLeash ? mob.getLeashHolder() != player : mob.getLeashHolder() != null)) return false;
         var typeKey = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType());
         if (typeKey != null && config.getBlacklist().contains(typeKey.toString())) return false;
         if (mob instanceof TamableAnimal tamable && tamable.isTame()) {
@@ -125,6 +143,14 @@ public class LeashTeleportHandler {
     }
 
     private static void teleportMobs(ServerPlayer player, PendingTeleport pending) {
+        teleportMobs(player, pending, true);
+    }
+
+    public static void resumePendingMob(ServerPlayer player, Mob mob, OpenPartiesAndClaimsCompat.TeleportType type) {
+        teleportMobs(player, new PendingTeleport((ServerLevel) mob.level(), List.of(mob), type), false);
+    }
+
+    private static void teleportMobs(ServerPlayer player, PendingTeleport pending, boolean requireLeash) {
         LeashedTeleportConfig config = LeashedTeleportConfig.get();
         if (!canFollow(player, pending.teleportType(), config)) return;
         ServerLevel targetLevel = player.level();
@@ -134,22 +160,27 @@ public class LeashTeleportHandler {
         boolean unsafe = false;
         boolean claimBlocked = false;
         for (Mob mob : pending.mobs()) {
-            if (mob.level() != pending.originLevel() || !isEligible(mob, player, config)) continue;
-            BlockPos safePos = TeleportSafetyChecker.findSafeLocation(targetLevel, mob,
+            if (mob.level() != pending.originLevel() || !isEligible(mob, player, config, requireLeash)) continue;
+            Vec3 safePos = TeleportSafetyChecker.findSafeLocation(targetLevel, mob,
                     player.getX(), player.getY(), player.getZ());
             if (safePos == null) {
+                if (requireLeash && !TeleportSafetyChecker.areSearchChunksLoaded(targetLevel, mob, player.position())) {
+                    PendingLeashTeleports.schedule(player, mob, pending.teleportType());
+                    continue;
+                }
                 unsafe = true;
                 continue;
             }
             if (config.isRespectOpenPartiesAndClaims()
-                    && !OpenPartiesAndClaimsCompat.canTeleportInto(targetLevel, safePos, player, pending.teleportType())) {
+                    && !OpenPartiesAndClaimsCompat.canTeleportInto(targetLevel, BlockPos.containing(safePos), player, pending.teleportType())) {
                 claimBlocked = true;
                 continue;
             }
             if (crossDim) {
                 teleportAcrossDimensions(mob, player, targetLevel, safePos, config);
             } else {
-                mob.snapTo(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5, mob.getYRot(), mob.getXRot());
+                mob.snapTo(safePos.x, safePos.y, safePos.z, mob.getYRot(), mob.getXRot());
+                if (mob.getLeashHolder() != player) mob.setLeashedTo(player, true);
                 applyProtection(mob, config.getDamageResistanceDuration());
             }
         }
@@ -160,7 +191,7 @@ public class LeashTeleportHandler {
     }
 
     private static void teleportAcrossDimensions(Mob mob, ServerPlayer player, ServerLevel target,
-                                                 BlockPos pos, LeashedTeleportConfig config) {
+                                                 Vec3 pos, LeashedTeleportConfig config) {
         UUID mobId = mob.getUUID();
         var originalLeash = mob.getLeashData();
         boolean teleported = false;
@@ -168,7 +199,7 @@ public class LeashTeleportHandler {
         try {
             mob.removeLeash();
             applyProtection(mob, config.getDamageResistanceDuration());
-            teleported = mob.teleportTo(target, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5,
+            teleported = mob.teleportTo(target, pos.x, pos.y, pos.z,
                     Set.of(), mob.getYRot(), mob.getXRot(), false);
             if (!teleported) {
                 LeashedTeleportMod.LOGGER.warn("[{}] Failed to teleport leashed mob {}.",

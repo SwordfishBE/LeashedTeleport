@@ -7,6 +7,13 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.leashedteleport.config.LeashedTeleportConfig;
 import net.leashedteleport.permission.PermissionManager;
+import net.leashedteleport.safety.TeleportSafetyChecker;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
@@ -103,6 +110,37 @@ public final class CompatibilityProbe implements ModInitializer {
         check("Pearl exception grants entry", allowed(player, claimPos, OpenPartiesAndClaimsCompat.TeleportType.ENDER_PEARL));
         setOption(claimConfig, PlayerConfigOptions.FULL_ACCESS, "E");
         check("Claim full access grants general entry", allowed(player, claimPos, OpenPartiesAndClaimsCompat.TeleportType.GENERAL));
+        Mob cow = (Mob) BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse("minecraft:cow"))
+                .create(level, EntitySpawnReason.COMMAND);
+        Vec3 cold = new Vec3(-1048576.3, 80, 153.3);
+        check("Cold terrain detected without loading", !TeleportSafetyChecker.areSearchChunksLoaded(level, cow, cold)
+                && TeleportSafetyChecker.findSafeLocation(level, cow, cold.x, cold.y, cold.z) == null);
+        Vec3 grass = new Vec3(-4096.3, 80, 153.3);
+        BlockPos center = BlockPos.containing(grass);
+        for (BlockPos floor : BlockPos.betweenClosed(center.offset(-6, -1, -6), center.offset(6, -1, 6))) {
+            level.getChunk(floor.getX() >> 4, floor.getZ() >> 4);
+            level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+        }
+        level.setBlockAndUpdate(center, Blocks.SHORT_DRY_GRASS.defaultBlockState());
+        check("Negative fractional destination in dry grass accepted", grass.equals(
+                TeleportSafetyChecker.findSafeLocation(level, cow, grass.x, grass.y, grass.z)));
+        for (BlockPos floor : BlockPos.betweenClosed(center.offset(-6, -1, -6), center.offset(6, -1, 6))) {
+            level.setBlockAndUpdate(floor, Blocks.STONE_SLAB.defaultBlockState());
+        }
+        level.setBlockAndUpdate(center, Blocks.AIR.defaultBlockState());
+        Vec3 slab = grass.add(0, -0.5, 0);
+        check("Real slab collision surface accepted", slab.equals(
+                TeleportSafetyChecker.findSafeLocation(level, cow, grass.x, grass.y, grass.z)));
+        BlockPos passage = new BlockPos(-200, 120, 200);
+        for (BlockPos block : BlockPos.betweenClosed(passage.offset(-6, -1, -6), passage.offset(6, 5, 6))) {
+            level.getChunk(block.getX() >> 4, block.getZ() >> 4);
+            level.setBlock(block, block.getY() < passage.getY() || block.getX() != passage.getX()
+                    ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
+        }
+        Vec3 passageCenter = new Vec3(passage.getX() + 0.5, passage.getY(), passage.getZ() + 0.5);
+        check("Real cow finds narrow corridor center", passageCenter.equals(
+                TeleportSafetyChecker.findSafeLocation(level, cow,
+                        passage.getX() + 0.3, passage.getY(), passage.getZ() + 0.5)));
     }
 
     private static boolean allowed(ServerPlayer player, BlockPos pos, OpenPartiesAndClaimsCompat.TeleportType type) {
