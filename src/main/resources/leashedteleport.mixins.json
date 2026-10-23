@@ -1,12 +1,12 @@
 {
   "required": true,
   "package": "net.leashedteleport.mixin",
+  "plugin": "net.leashedteleport.compat.LeashedTeleportMixinPlugin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "ServerPlayerTeleportMixin",
     "LeashableEntityAccessor",
     "ServerLevelEntityManagerAccessor",
-    "MoonriseEntityLookupAccessor",
     "PersistentEntitySectionManagerAccessor",
     "ThrownEnderpearlMixin",
     "TeleportRandomlyConsumeEffectMixin"
