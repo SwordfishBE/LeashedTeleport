@@ -23,6 +23,7 @@ A Fabric mod for Minecraft that brings your leashed entities along when you tele
 - **Configurable blacklist** — define entity types that should never teleport, even if leashed to you.
 - **Optional Mod Menu integration** — when Mod Menu and Cloth Config are present on the client, you can edit the same config through an in-game screen.
 - **In-game commands** — `/leashedteleport info` and `/leashedteleport reload` (operator level 2 required).
+- **Supports** - Moonrise, C2ME and Async
 
 ---
 
@@ -42,6 +43,7 @@ Config file: `.minecraft/config/leashedteleport.json`
 A default config is created automatically on first launch, with inline comments that explain each option.
 
 If Mod Menu is installed on the client, Leashed Teleport exposes a config screen there too. Cloth Config is optional: without it, the mod still works normally, but no config GUI is shown.
+A default config is created automatically on first launch, with inline comments that explain each option.
 
 ```jsonc
 {
@@ -155,14 +157,22 @@ Open Parties and Claims is optional. Leashed Teleport does not depend on it dire
 
 Set `respectOpenPartiesAndClaims` to `false` if you want Leashed Teleport to ignore OPAC claim rules.
 
+If OPAC is installed but its protection API cannot be read, mob-follow teleports are blocked and a warning is logged. Missing pearl or chorus protection options also deny entry for players without normal claim access. Without OPAC installed, teleports work normally.
+
 ---
 
 ## 🧑‍🤝‍🧑 Compatibility
+
+This mod works with Moonrise, C2ME and Async
+Some of these mods cannot be loaded together.
 
 | Mod | Status |
 |-----|--------|
 | [Essential Commands](https://modrinth.com/mod/essential-commands) | ✅ Compatible |
 | [Fabric Essentials](https://modrinth.com/mod/melius-essentials) | ✅ Compatible |
+| [Moonrise](https://modrinth.com/mod/moonrise-opt) | ✅ Compatible |
+| [C2ME](https://modrinth.com/mod/c2me-fabric) | ✅ Compatible |
+| [Async](https://modrinth.com/mod/async) | ✅ Compatible |
 | [TpWithMe](https://github.com/SwordfishBE/TpWithMe) | ✅ Compatible |
 
 ---

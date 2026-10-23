@@ -12,6 +12,7 @@ import net.leashedteleport.permission.PermissionManager;
 import net.leashedteleport.safety.TeleportSafetyChecker;
 import net.leashedteleport.util.LoadedMobLookup;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -48,7 +49,10 @@ public class LeashTeleportHandler {
             PendingLeashTeleports.clear(server);
             clearAllPending();
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> clearAllPending());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            PendingLeashTeleports.clear(server);
+            clearAllPending();
+        });
         // All captures complete synchronously. Anything left at tick end was interrupted.
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             clearAllPending();
@@ -56,7 +60,7 @@ public class LeashTeleportHandler {
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> {
             // Losing tracking visibility is not an entity removal.
-            if (entity instanceof Mob mob && mob.isRemoved()) PendingLeashTeleports.cancelMob(mob);
+            if (entity instanceof Mob mob && mob.isRemoved()) PendingLeashTeleports.onEntityRemoved(mob);
         });
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (!(entity instanceof Mob mob)) return;
@@ -105,7 +109,10 @@ public class LeashTeleportHandler {
 
     public static void capturePendingTeleport(ServerPlayer player, OpenPartiesAndClaimsCompat.TeleportType type) {
         if (PENDING_TELEPORTS.containsKey(player.getUUID())) return;
-        PendingLeashTeleports.prepareTeleport(player, type);
+        // Chorus may fail without moving the player; preserve terrain waits until success.
+        if (type != OpenPartiesAndClaimsCompat.TeleportType.CHORUS_FRUIT) {
+            PendingLeashTeleports.prepareTeleport(player, type);
+        }
         // Keep the cause even for an empty/denied capture; generic hooks must not override it.
         PENDING_TELEPORTS.put(player.getUUID(), new PendingTeleport(player.level(), collectEligibleMobs(player), type));
     }
@@ -117,7 +124,11 @@ public class LeashTeleportHandler {
     public static void handlePendingTeleport(ServerPlayer player) {
         PendingTeleport pending = PENDING_TELEPORTS.remove(player.getUUID());
         if (pending == null || player.isRemoved()) return;
-        PendingLeashTeleports.retargetPlayer(player);
+        if (pending.teleportType() == OpenPartiesAndClaimsCompat.TeleportType.CHORUS_FRUIT) {
+            PendingLeashTeleports.cancelPlayer(player.level().getServer(), player.getUUID());
+        } else {
+            PendingLeashTeleports.retargetPlayer(player);
+        }
         try {
             teleportMobs(player, pending);
         } finally {
@@ -185,7 +196,7 @@ public class LeashTeleportHandler {
                 continue;
             }
             if (config.isRespectOpenPartiesAndClaims()
-                    && !OpenPartiesAndClaimsCompat.canTeleportInto(targetLevel, BlockPos.containing(safePos), player, pending.teleportType())) {
+                    && !canEnterDestination(targetLevel, mob, safePos, player, pending.teleportType())) {
                 claimBlocked = true;
                 continue;
             }
@@ -202,6 +213,18 @@ public class LeashTeleportHandler {
                 "[LeashedTeleport] Not enough safe space at destination; some leashed mobs stayed behind."));
         if (claimBlocked) player.sendSystemMessage(Component.literal(
                 "[LeashedTeleport] Open Parties and Claims blocked your leashed mobs from entering this claim."));
+    }
+
+    private static boolean canEnterDestination(ServerLevel level, Mob mob, Vec3 pos,
+                                               ServerPlayer player, OpenPartiesAndClaimsCompat.TeleportType type) {
+        var box = mob.getBoundingBox().move(pos.x - mob.getX(), pos.y - mob.getY(), pos.z - mob.getZ());
+        for (int x = Mth.floor(box.minX) >> 4; x <= Mth.floor(Math.nextDown(box.maxX)) >> 4; x++) {
+            for (int z = Mth.floor(box.minZ) >> 4; z <= Mth.floor(Math.nextDown(box.maxZ)) >> 4; z++) {
+                if (!OpenPartiesAndClaimsCompat.canTeleportInto(level,
+                        new BlockPos(x << 4, Mth.floor(pos.y), z << 4), player, type)) return false;
+            }
+        }
+        return true;
     }
 
     private static void teleportAcrossDimensions(Mob mob, ServerPlayer player, ServerLevel target,

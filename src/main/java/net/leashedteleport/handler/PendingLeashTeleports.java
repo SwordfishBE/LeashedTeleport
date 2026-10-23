@@ -16,7 +16,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,8 +28,11 @@ import java.util.Queue;
 public final class PendingLeashTeleports {
     private static final int TIMEOUT_TICKS = 100;
     private record Request(UUID player, ResourceKey<Level> source, ResourceKey<Level> target,
-                           Vec3 sourcePos, Vec3 targetPos, TeleportType type, int deadline) {}
-    private static final Map<UUID, Request> pending = new HashMap<>();
+                           Vec3 sourcePos, Vec3 targetPos, TeleportType type, int deadline, int sourceEntityId) {}
+    // Worker callbacks only read a request snapshot; all mutations stay on the server thread.
+    private static final Map<UUID, Request> pending = new ConcurrentHashMap<>();
+    private record RemovedMob(UUID id, Request request, Vec3 position) {}
+    private static final Queue<RemovedMob> removedMobs = new ConcurrentLinkedQueue<>();
     private record LeadDrop(ResourceKey<Level> dimension, Vec3 position) {}
     private static final Queue<LeadDrop> leadDrops = new ArrayDeque<>();
 
@@ -40,7 +44,7 @@ public final class PendingLeashTeleports {
         mob.removeLeash();
         pending.put(mob.getUUID(), new Request(player.getUUID(), mob.level().dimension(),
                 player.level().dimension(), mob.position(), player.position(), type,
-                player.level().getServer().getTickCount() + TIMEOUT_TICKS));
+                player.level().getServer().getTickCount() + TIMEOUT_TICKS, mob.getId()));
     }
 
     public static void cancelPlayer(MinecraftServer server, UUID player) {
@@ -73,17 +77,40 @@ public final class PendingLeashTeleports {
             if (request.player().equals(player.getUUID())) {
                 pending.put(entry.getKey(), new Request(request.player(), request.source(),
                         player.level().dimension(), request.sourcePos(), player.position(),
-                        request.type(), request.deadline()));
+                        request.type(), player.level().getServer().getTickCount() + TIMEOUT_TICKS, request.sourceEntityId()));
             }
         }
     }
 
     public static void clear(MinecraftServer server) {
+        drainRemovedMobs();
         try {
             for (var entry : List.copyOf(pending.entrySet())) cancel(server, entry.getKey(), entry.getValue());
         } finally {
             pending.clear();
+            removedMobs.clear();
             flushLeadDrops(server);
+        }
+    }
+
+    public static void onEntityRemoved(Mob mob) {
+        Request request = pending.get(mob.getUUID());
+        if (request == null || request.sourceEntityId() != mob.getId()
+                || request.source() != mob.level().dimension()) return;
+        if (mob.level().getServer().isSameThread()) {
+            cancelMob(mob);
+            return;
+        }
+        removedMobs.add(new RemovedMob(mob.getUUID(), request, mob.position()));
+    }
+
+    private static void drainRemovedMobs() {
+        RemovedMob removed;
+        while ((removed = removedMobs.poll()) != null) {
+            // An old worker callback must not consume a newer request, even if its values match.
+            if (pending.get(removed.id()) == removed.request() && pending.remove(removed.id(), removed.request())) {
+                leadDrops.add(new LeadDrop(removed.request().source(), removed.position()));
+            }
         }
     }
 
@@ -125,6 +152,7 @@ public final class PendingLeashTeleports {
     }
 
     public static void tick(MinecraftServer server) {
+        drainRemovedMobs();
         for (var entry : List.copyOf(pending.entrySet())) {
             UUID mobId = entry.getKey();
             Request request = entry.getValue();

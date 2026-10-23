@@ -78,6 +78,7 @@ class LeashTeleportHandlerTest {
         when(player.getY()).thenReturn(64.0);
         when(player.getZ()).thenReturn(2000.0);
         when(mob.level()).thenReturn(origin);
+        when(mob.getBoundingBox()).thenReturn(new AABB(-0.45, 0, -0.45, 0.45, 1.4, 0.45));
         when(mob.getLeashHolder()).thenReturn(player);
         doReturn(mock(EntityType.class)).when(mob).getType();
         when(origin.getEntitiesOfClass(eq(Mob.class), any())).thenReturn(List.of(mob));
@@ -272,13 +273,17 @@ class LeashTeleportHandlerTest {
         verify(mob, never()).spawnAtLocation(eq(origin), eq(Items.LEAD));
     }
 
-    @Test void retargetDoesNotExtendOriginalDeadline() {
+    @Test void successfulRetargetStartsNewDestinationDeadline() throws Exception {
         prepareColdDestination();
         when(deferredServer.getTickCount()).thenReturn(99);
         LeashTeleportHandler.capturePendingTeleport(player);
         when(player.position()).thenReturn(new Vec3(2000, 64, 3000));
         LeashTeleportHandler.handlePendingTeleport(player);
         when(deferredServer.getTickCount()).thenReturn(100);
+        PendingLeashTeleports.tick(deferredServer);
+        assertEquals(1, pendingTransfers().size());
+        verify(mob, never()).spawnAtLocation(eq(origin), eq(Items.LEAD));
+        when(deferredServer.getTickCount()).thenReturn(199);
         PendingLeashTeleports.tick(deferredServer);
         verify(mob, times(1)).spawnAtLocation(eq(origin), eq(Items.LEAD));
         verify(player).sendSystemMessage(any());
@@ -320,7 +325,7 @@ class LeashTeleportHandlerTest {
         verify(mob).setLeashedTo(player, true);
     }
 
-    @Test void missingMobTimeoutRefundsOnceWithoutExtendingDeadline() throws Exception {
+    @Test void missingMobGetsNewDestinationDeadlineAndRefundsOnce() throws Exception {
         prepareColdDestination();
         when(origin.getEntity(mob.getUUID())).thenReturn(null);
         when(deferredServer.getTickCount()).thenReturn(99);
@@ -333,11 +338,158 @@ class LeashTeleportHandlerTest {
              var items = mockConstruction(net.minecraft.world.entity.item.ItemEntity.class)) {
             when(deferredServer.getTickCount()).thenReturn(100);
             PendingLeashTeleports.tick(deferredServer);
+            assertEquals(1, pendingTransfers().size());
+            assertEquals(0, items.constructed().size());
+            when(deferredServer.getTickCount()).thenReturn(199);
+            PendingLeashTeleports.tick(deferredServer);
             PendingLeashTeleports.tick(deferredServer);
             assertTrue(pendingTransfers().isEmpty());
             assertEquals(1, items.constructed().size());
             verify(origin).addFreshEntity(items.constructed().getFirst());
             verify(player, times(1)).sendSystemMessage(any());
+        }
+    }
+
+    @Test void expiredWaitCannotBeResurrectedByNewTeleport() throws Exception {
+        prepareColdDestination();
+        when(deferredServer.getTickCount()).thenReturn(100);
+        LeashTeleportHandler.capturePendingTeleport(player);
+        when(player.position()).thenReturn(new Vec3(2000, 64, 3000));
+        LeashTeleportHandler.handlePendingTeleport(player);
+        assertTrue(pendingTransfers().isEmpty());
+        verify(mob, times(1)).spawnAtLocation(eq(origin), eq(Items.LEAD));
+    }
+
+    @Test void failedChorusKeepsOriginalTerrainWaitAndDeadline() throws Exception {
+        prepareColdDestination();
+        Object request = pendingTransfers().get(mob.getUUID());
+        LeashTeleportHandler.capturePendingTeleport(player, TeleportType.CHORUS_FRUIT);
+        assertSame(request, pendingTransfers().get(mob.getUUID()));
+        LeashTeleportHandler.clearPendingTeleport(player);
+        assertSame(request, pendingTransfers().get(mob.getUUID()));
+        when(deferredServer.getTickCount()).thenReturn(5);
+        safety.when(() -> TeleportSafetyChecker.findSafeLocation(any(), any(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(new Vec3(1000, 64, 2000));
+        PendingLeashTeleports.tick(deferredServer);
+        assertTrue(pendingTransfers().isEmpty());
+        verify(mob).snapTo(1000, 64, 2000, 0, 0);
+        verify(mob, never()).spawnAtLocation(eq(origin), eq(Items.LEAD));
+    }
+
+    @Test void successfulDisabledChorusCancelsOldWaitAndRefundsOnce() throws Exception {
+        prepareColdDestination();
+        config.chorus_fruit_teleport = false;
+        LeashTeleportHandler.capturePendingTeleport(player, TeleportType.CHORUS_FRUIT);
+        assertEquals(1, pendingTransfers().size());
+        when(player.position()).thenReturn(new Vec3(2000, 64, 3000));
+        LeashTeleportHandler.handlePendingTeleport(player);
+        LeashTeleportHandler.handlePendingTeleport(player);
+        PendingLeashTeleports.tick(deferredServer);
+        assertTrue(pendingTransfers().isEmpty());
+        verify(mob, times(1)).spawnAtLocation(eq(origin), eq(Items.LEAD));
+        verify(mob, never()).snapTo(anyDouble(), anyDouble(), anyDouble(), anyFloat(), anyFloat());
+    }
+
+    @Test void successfulPermissionDeniedChorusCancelsOldWaitWithoutCarry() throws Exception {
+        prepareColdDestination();
+        permissions.when(() -> PermissionManager.canChorusFruitTeleport(player)).thenReturn(false);
+        LeashTeleportHandler.capturePendingTeleport(player, TeleportType.CHORUS_FRUIT);
+        assertEquals(1, pendingTransfers().size());
+        LeashTeleportHandler.handlePendingTeleport(player);
+        assertTrue(pendingTransfers().isEmpty());
+        verify(mob, times(1)).spawnAtLocation(eq(origin), eq(Items.LEAD));
+        verify(mob, never()).snapTo(anyDouble(), anyDouble(), anyDouble(), anyFloat(), anyFloat());
+    }
+
+    @Test void workerRemovalIsDeferredAndRefundedOnce() throws Exception {
+        prepareColdDestination();
+        when(mob.isRemoved()).thenReturn(true);
+        PendingLeashTeleports.onEntityRemoved(mob);
+        PendingLeashTeleports.onEntityRemoved(mob);
+        assertEquals(1, pendingTransfers().size());
+        verify(origin, never()).addFreshEntity(any());
+        try (var stacks = mockConstruction(net.minecraft.world.item.ItemStack.class);
+             var items = mockConstruction(net.minecraft.world.entity.item.ItemEntity.class)) {
+            PendingLeashTeleports.tick(deferredServer);
+            PendingLeashTeleports.tick(deferredServer);
+            assertTrue(pendingTransfers().isEmpty());
+            assertEquals(1, items.constructed().size());
+            verify(origin).addFreshEntity(items.constructed().getFirst());
+        }
+    }
+
+    @Test void oldWorkerRemovalCannotConsumeEqualReplacementRequest() throws Exception {
+        prepareColdDestination();
+        Object old = pendingTransfers().get(mob.getUUID());
+        PendingLeashTeleports.onEntityRemoved(mob);
+        mob.setLeashedTo(player, true);
+        PendingLeashTeleports.schedule(player, mob, TeleportType.GENERAL);
+        Object replacement = pendingTransfers().get(mob.getUUID());
+        assertNotSame(old, replacement);
+        assertEquals(old, replacement);
+        try (var stacks = mockConstruction(net.minecraft.world.item.ItemStack.class);
+             var items = mockConstruction(net.minecraft.world.entity.item.ItemEntity.class)) {
+            PendingLeashTeleports.tick(deferredServer);
+            assertSame(replacement, pendingTransfers().get(mob.getUUID()));
+            assertEquals(1, items.constructed().size());
+        }
+    }
+
+    @Test void removedOldInstanceCannotCancelNewInstanceWithSameUuid() throws Exception {
+        prepareColdDestination();
+        when(mob.getId()).thenReturn(77);
+        mob.setLeashedTo(player, true);
+        PendingLeashTeleports.schedule(player, mob, TeleportType.GENERAL);
+        Object replacement = pendingTransfers().get(mob.getUUID());
+        Mob oldInstance = mock(Mob.class);
+        UUID id = mob.getUUID();
+        when(oldInstance.getUUID()).thenReturn(id);
+        when(oldInstance.level()).thenReturn(origin);
+        when(oldInstance.getId()).thenReturn(1);
+        PendingLeashTeleports.onEntityRemoved(oldInstance);
+        try (var stacks = mockConstruction(net.minecraft.world.item.ItemStack.class);
+             var items = mockConstruction(net.minecraft.world.entity.item.ItemEntity.class)) {
+            PendingLeashTeleports.tick(deferredServer);
+            assertSame(replacement, pendingTransfers().get(mob.getUUID()));
+            assertEquals(1, items.constructed().size());
+        }
+    }
+
+    @Test void mainThreadOldRemovalCannotCancelReplacement() throws Exception {
+        prepareColdDestination();
+        when(deferredServer.isSameThread()).thenReturn(true);
+        when(mob.getId()).thenReturn(77);
+        PendingLeashTeleports.schedule(player, mob, TeleportType.GENERAL);
+        Object replacement = pendingTransfers().get(mob.getUUID());
+        Mob old = mock(Mob.class);
+        UUID id = mob.getUUID();
+        when(old.getUUID()).thenReturn(id);
+        when(old.getId()).thenReturn(1);
+        when(old.level()).thenReturn(origin);
+        try (var stacks = mockConstruction(net.minecraft.world.item.ItemStack.class);
+             var items = mockConstruction(net.minecraft.world.entity.item.ItemEntity.class)) {
+            try {
+                PendingLeashTeleports.onEntityRemoved(old);
+                assertSame(replacement, pendingTransfers().get(id));
+            } finally {
+                PendingLeashTeleports.tick(deferredServer);
+            }
+        }
+    }
+
+    @Test void claimAtOverlappingChunkBlocksLeashedMob() {
+        config.respectOpenPartiesAndClaims = true;
+        Vec3 landing = new Vec3(15.9, 64, 8);
+        when(mob.getBoundingBox()).thenReturn(new AABB(-0.45, 0, -0.45, 0.45, 1.4, 0.45));
+        safety.when(() -> TeleportSafetyChecker.findSafeLocation(any(), any(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(landing);
+        try (var opac = mockStatic(OpenPartiesAndClaimsCompat.class)) {
+            opac.when(() -> OpenPartiesAndClaimsCompat.canTeleportInto(any(), any(), any(), any()))
+                    .thenAnswer(call -> ((BlockPos) call.getArgument(1)).getX() < 16);
+            LeashTeleportHandler.capturePendingTeleport(player);
+            LeashTeleportHandler.handlePendingTeleport(player);
+            verify(mob, never()).snapTo(anyDouble(), anyDouble(), anyDouble(), anyFloat(), anyFloat());
+            verify(player).sendSystemMessage(any());
         }
     }
 

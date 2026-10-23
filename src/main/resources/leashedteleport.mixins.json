@@ -6,6 +6,7 @@
     "ServerPlayerTeleportMixin",
     "LeashableEntityAccessor",
     "ServerLevelEntityManagerAccessor",
+    "MoonriseEntityLookupAccessor",
     "PersistentEntitySectionManagerAccessor",
     "ThrownEnderpearlMixin",
     "TeleportRandomlyConsumeEffectMixin"
